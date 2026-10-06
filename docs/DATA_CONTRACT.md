@@ -73,6 +73,7 @@ person values are illustrative placeholders, not real rows from the run.
 | `windowStart` | string (`HH:MM`) | Start of the 8-hour window: `floor_to_hour(updatedAt)`. |
 | `windowEnd` | string (`HH:MM`) | End of the window: `windowStart + 8h`. May cross midnight. |
 | `poolOrder` | array of string | **Display order of the four pool families.** Emitted by Python (see below). |
+| `visibilityGroups[]` | array of object | **Visibility groups the reader can switch between.** Emitted by Python (see below). ADR-011. |
 
 #### `meta.poolOrder` (ADR-009)
 
@@ -97,6 +98,72 @@ person values are illustrative placeholders, not real rows from the run.
   never be dropped.
 * If `poolOrder` is missing or malformed, the frontend degrades to "every pool
   that actually has bars, alphabetical". It never falls back to a hardcoded list.
+
+#### `meta.visibilityGroups[]` (ADR-011)
+
+The pool visibility groups the reader can switch between. **A presentation
+filter, not access control** — see the limitation note at the end of this
+section.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Stable group key, also the `localStorage` value. First entry is the default. |
+| `label` | string | Display label, rendered verbatim in the selector. |
+| `families` | array of string | Pool **family** names (the `pool` enum). Never `RECURSO` values. |
+| `resources` | array of string | The `RECURSO` values of those families, flattened from `_POOL_FAMILY_RESOURCES`. |
+| `kpis` | object | Same shape as the top-level `kpis`, computed over this group's rows only. |
+| `tickets` | object | Ticket-ID sets per action scope, used to scope the action drawers. |
+
+Current groups, all three emitted unconditionally:
+
+| # | `id` | `label` | `families` | Default |
+|---|------|---------|------------|---------|
+| 1 | `yape` | `YAPE` | `Yape` | **yes** |
+| 2 | `sf` | `S&F` | `S&F` | no |
+| 3 | `agileops` | `AgileOps` | `AgileOps ORO`, `AgileOps Prod` | no |
+
+##### `meta.visibilityGroups[].tickets`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `passesInWindow` | array of string | Tickets with a row in the 8h window, for this group. |
+| `lateStarts` | array of string | Tickets whose `_late_start` flag is set, for this group. |
+| `ratificationsSoon` | array of string | Tickets whose `_ratification_soon` flag is set. |
+| `ratificationsExpired` | array of string | Tickets whose `_ratification_expired` flag is set. |
+
+These are **ID sets, not record copies**. `window.ChangeOpsActions` stays one
+global payload (ADR-008) with no pool field; the web layer filters it by
+membership in the active group's set. One copy of the record data, every drawer
+scoped. A ticket can legitimately repeat inside a scope (the same ticket with
+two different assigned resources), so the array length is the number of
+**records** to render, and the deduplicated count is the number of distinct
+tickets.
+
+##### Invariants
+
+* The groups are a **partition** of the four pool families. Every family is in
+  exactly one group, so the union of the groups covers the whole in-scope
+  dataset and no record is invisible in every view.
+  `column_map._build_visibility_groups()` raises `ValueError` at import if that
+  stops being true.
+* The top-level `kpis` is **not always the sum of the groups**: rows outside
+  every group (outside the pool whitelist) contribute to the global object
+  only.
+* If the key is missing (an older generated file) the web layer renders the
+  unfiltered dashboard. Python leaves such a contract untouched rather than
+  raising.
+* If a group's `tickets` object is malformed, the web layer logs
+  `console.error` and falls back to the **unfiltered** action payload. Hiding
+  real data would be worse than showing all of it.
+
+##### Limitation — read before relying on this
+
+> All three groups' rows and records are embedded in the **same**
+> `dashboard.html` / `dashboard_data.json`. Anyone can read every group's data
+> from the file or from devtools, including the groups not selected. The
+> `localStorage` key is a convenience, not a guard. Real enforcement needs a
+> per-group payload split or an authorising backend; neither exists here.
+> Full statement in ADR-011.
 
 ### `kpis`
 
@@ -257,7 +324,7 @@ workspace/input/ControlPases.xlsx
   ↓  python/excel_reader.py       (pandas; column mapping; pool-scope filter)
   ↓  python/rules.py              (late start, ratification, conflicts)
   ↓  python/kpi.py                (KPI counters from rule flags)
-  ↓  python/adapter.py            (Data Contract v1 + meta.poolOrder)
+  ↓  python/adapter.py            (Data Contract v1 + meta.poolOrder + meta.visibilityGroups)
   ↓  python/renderer.py           (inline CSS/JS + embedded JSON)
 workspace/output/dashboard_data.json · dashboard.html · diagnostic_report.json
   ↓
@@ -316,6 +383,7 @@ Last real pipeline run, from the repository, on `workspace/input/ControlPases.xl
 | Timeline groups / bars | 4 groups — Yape 2, S&F 18, AgileOps ORO 9, AgileOps Prod 53 (82 bars) |
 | Table rows | 175 |
 | KPIs | `lateStarts` 3, `ratificationsSoon` 0, `ratificationsExpired` 24, `reversions` 0 |
+| Visibility groups | 3 — `yape` (default), `sf`, `agileops`; see the per-group table below |
 | Out-of-scope values present | none — `INFRAESTRUCTURA` and `AUTOMATIZADO` never appear |
 
 The 571 in-scope rows are exactly the sum of the per-value `RECURSO` counts:
@@ -335,6 +403,24 @@ The 571 in-scope rows are exactly the sum of the per-value `RECURSO` counts:
 `POOL - YAPE-DERIVADO` is in the whitelist because the family definition
 requires it, but this workbook snapshot contains **zero** rows with that value.
 
+### Per visibility group (ADR-011)
+
+Measured from the same run, by rendering the generated `dashboard.html` once per
+group:
+
+| `id` | Timeline families | Table rows | `tickets.passesInWindow` | `kpis.lateStarts` | `ratificationsSoon` | `ratificationsExpired` |
+|------|-------------------|-----------|---------------------------|----------------------|---------------------|--------------------------|
+| `yape` | Yape | 4 | 2 | 0 | 0 | 1 |
+| `sf` | S&F | 28 | 24 | 0 | 0 | 4 |
+| `agileops` | AgileOps ORO, AgileOps Prod | 143 | 70 | 3 | 0 | 19 |
+| **union** | all 4 | **175** | **96** | **3** | **0** | **24** |
+
+The union row is the invariant: every in-scope record belongs to exactly one
+group, so the three views together reconstruct the unfiltered dashboard — 81
+distinct timeline tickets and 165 distinct table tickets, equal to the
+unfiltered contract. The table row count (175) exceeds the distinct ticket
+count (165) because a ticket can carry more than one assigned resource.
+
 ---
 
 ## Changes
@@ -342,4 +428,5 @@ requires it, but this workbook snapshot contains **zero** rows with that value.
 | Version | Date | Change |
 |---------|------|--------|
 | v1 | 2026-09-10 | Initial contract with ADR-004 (minutes) |
+| v1.2 | 2026-10-05 | **Pool visibility groups** (ADR-011). `meta.visibilityGroups[]` added, each entry carrying `kpis` and `tickets` (ticket-ID sets per action scope) so the web layer can scope the timeline, table, KPI cards and action drawers without hardcoding anything. `meta.kpis` and `window.ChangeOpsActions` stay global. Presentation filter only — all groups remain embedded in the same file. |
 | v1.1 | 2026-10-05 | **AgileOps Prod scope.** `pool` enum replaced with the four AgileOps Prod families; `meta.poolOrder` added (ADR-009); cell width corrected from 80 px to the real 96 px; `type` axis separated from pool identity; conflict rule restated precisely. |

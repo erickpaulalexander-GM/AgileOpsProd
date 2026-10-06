@@ -136,6 +136,14 @@ theme, and the whole `excel_reader`/`column_map` date parsing.
 - [ ] Run the pipeline end to end on the real workbook and verify the outputs
 - Route: delegated writer
 
+### T7 — Pool visibility selector (Yape / S&F / AgileOps)
+- [ ] `column_map.py`: 3 visibility groups declared as pool families, partition-validated at import
+- [ ] Per-group KPIs and ticket id sets emitted from Python
+- [ ] Web selector in the topbar, filtered timeline + table + KPIs + drawer
+- [ ] `localStorage` persistence with fallback, empty state, active-group indicator
+- [ ] ADR-011 and the honest limitation recorded in UI, contract and README
+- Route: delegated writer
+
 ## Authorized edit surfaces
 
 - `D:\IA_DEV\AgileOpsProd\**` except `workspace/input/**` and `D:\IA_DEV\ChangeOpsConsole\**`

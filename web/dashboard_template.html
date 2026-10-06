@@ -16,11 +16,34 @@
     <header class="topbar">
       <h1>AgileOps Prod Console</h1>
       <div class="topbar-meta">
+        <!-- ============ POOL VISIBILITY SELECTOR (ADR-011) ============
+             Options are populated from meta.visibilityGroups by dashboard.js,
+             so the web layer hardcodes no group list. A real <label for> +
+             native <select> keeps it keyboard and screen-reader accessible
+             with no ARIA juggling. -->
+        <div class="pool-group" id="pool-group">
+          <label class="pool-group__label" for="pool-group-select">Pool</label>
+          <select class="pool-group__select" id="pool-group-select"
+                  aria-describedby="pool-group-note"></select>
+          <span class="pool-group__badge" id="pool-group-badge"></span>
+          <span class="pool-group__counts" id="pool-group-counts"
+                role="status" aria-live="polite"></span>
+        </div>
         <span id="sync-indicator" class="sync-indicator" aria-label="Estado de sincronización"></span>
         <span id="last-update">—</span>
         <button class="theme-toggle" id="theme-toggle" aria-label="Cambiar tema">🌙</button>
       </div>
     </header>
+
+    <!-- ============ ADR-011 LIMITATION NOTE ============
+         The selector is a PRESENTATION FILTER, not access control: every
+         group's data is embedded in this same file. Said plainly, in the UI,
+         next to the selector, so nobody mistakes it for enforcement. -->
+    <p class="pool-group-note" id="pool-group-note">
+      Filtro de presentación: los datos de los demás pools siguen en este mismo
+      archivo y son legibles con las herramientas de desarrollo. No es un control
+      de acceso.
+    </p>
 
     <!-- KPI CARDS — 4 slots, populated by dashboard.js -->
     <section class="kpi-section" id="kpi-section">
@@ -55,6 +78,18 @@
         <div class="timeline__indicators" id="timeline-indicators"></div>
         <!-- Capa 5: Selección (resaltado KPI) -->
         <div class="timeline__selection" id="timeline-selection"></div>
+      </div>
+      <!-- Zero-result state (ADR-011): a group with no bars in the current
+           window. A sibling of the layers so a Timeline render cannot wipe it. -->
+      <div class="timeline-empty" id="timeline-empty" hidden>
+        <p class="timeline-empty__title">
+          Sin pases en la ventana actual para <span id="timeline-empty-group">—</span>
+        </p>
+        <p class="timeline-empty__text">
+          Pooles incluidos: <span id="timeline-empty-families"></span>.
+          No hay pases programados entre las
+          <span id="timeline-empty-window"></span>.
+        </p>
       </div>
     </section>
 

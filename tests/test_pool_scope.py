@@ -19,8 +19,10 @@ from adapter import compute_window, to_contract
 from column_map import (
     POOL_FAMILY_ORDER,
     get_pool_name,
+    get_visibility_group,
     is_in_scope_pool,
     normalize_recurso,
+    visibility_groups,
 )
 
 PYTHON_DIR = Path(__file__).resolve().parent.parent / "python"
@@ -232,3 +234,60 @@ def test_adapter_source_does_not_duplicate_the_pool_list():
     src = (PYTHON_DIR / "adapter.py").read_text(encoding="utf-8")
     for literal in column_map.IN_SCOPE_RECURSO:
         assert literal not in src, literal
+
+
+# ---------------------------------------------------------------
+# Visibility groups sit ON TOP of the whitelist (ADR-011), never instead of it
+# ---------------------------------------------------------------
+def test_grouping_does_not_widen_inclusion():
+    """The 3 groups are a partition of the whitelist, never an extension of it.
+
+    The groups are declared as FAMILIES, so they cannot smuggle in a resource
+    value: `resources` is flattened from the family table, and every in-scope
+    value still passes `is_in_scope_pool` on its own.
+    """
+    assert len(column_map.IN_SCOPE_RECURSO) == 8
+    assert len(column_map.IN_SCOPE_POOL_KEYS) == 8
+
+    covered: list[str] = []
+    for group in visibility_groups():
+        covered.extend(group["resources"])
+    assert set(covered) == set(column_map.IN_SCOPE_RECURSO)
+    assert len(covered) == 8
+
+
+def test_grouping_does_not_narrow_or_drop_an_in_scope_value():
+    """No in-scope value may fall outside every group.
+
+    An in-scope row that belonged to no group would be invisible in ALL views —
+    the grouping could silently delete operational data.
+    """
+    for recurso in column_map.IN_SCOPE_RECURSO:
+        assert get_visibility_group(recurso) != "", recurso
+
+
+def test_grouping_never_admits_an_out_of_scope_value():
+    """A value outside the whitelist has no group, whatever its spelling."""
+    for recurso in OUT_OF_SCOPE + ["POOL AGILEOPS", "", None, "nan"]:
+        assert not is_in_scope_pool(recurso), recurso
+        assert get_visibility_group(recurso) == "", recurso
+
+
+def test_pool_family_order_still_declares_four_families():
+    """Grouping must not collapse the 4 families into 3 display pools."""
+    assert POOL_FAMILY_ORDER == ("Yape", "S&F", "AgileOps ORO", "AgileOps Prod")
+    assert len(POOL_FAMILY_ORDER) == 4
+
+
+def test_group_table_declares_families_not_resource_literals():
+    """No RECURSO literal may live in the visibility-group table.
+
+    The group table must name FAMILIES only; the resources are derived from the
+    family table. This is what makes drift between the two impossible.
+    """
+    src = (PYTHON_DIR / "column_map.py").read_text(encoding="utf-8")
+    start = src.index("_VISIBILITY_GROUPS:")
+    end = src.index("\n)\n", start)
+    block = src[start:end]
+    for literal in column_map.IN_SCOPE_RECURSO:
+        assert literal not in block, literal

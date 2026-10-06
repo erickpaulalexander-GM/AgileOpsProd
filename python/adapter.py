@@ -24,6 +24,7 @@ from column_map import (
     POOL_FAMILY_ORDER,
     get_pool_name,
     normalize_recurso,
+    visibility_groups,
 )
 
 logger = logging.getLogger(__name__)
@@ -374,6 +375,12 @@ def to_contract(
             # web layer stops hardcoding it. Always the full list, even when a
             # family has zero bars in the window.
             "poolOrder": list(POOL_FAMILY_ORDER),
+            # The 3 pool visibility groups, published the same way poolOrder
+            # is (ADR-011): the web layer never hardcodes the group list, and
+            # each entry is derived from the family table in column_map.
+            # Per-group KPIs and action ticket sets are filled in afterwards
+            # by kpi.update_contract_visibility_kpis().
+            "visibilityGroups": visibility_groups(),
         },
         "kpis": {
             "lateStarts": 0,  # Calculated by kpi.py

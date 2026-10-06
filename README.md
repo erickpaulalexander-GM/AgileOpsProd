@@ -109,7 +109,7 @@ Three files, written to `workspace/output/`:
 ```powershell
 cd D:\IA_DEV\AgileOpsProd
 
-.\.venv-win\Scripts\python.exe -m pytest -q          # expect: 84 passed
+.\.venv-win\Scripts\python.exe -m pytest -q          # expect: 120 passed
 .\.venv-win\Scripts\python.exe -m ruff check .       # expect: All checks passed!
 
 node --check web\components\timeline\timeline.js    # expect: exit 0, no output
@@ -127,7 +127,8 @@ is needed. `ruff` config lives in `pyproject.toml` (`line-length = 100`,
 
 An end-to-end smoke check is the pipeline run above: exit code `0` plus three
 fresh files in `workspace/output/`, with `meta.poolOrder` reporting exactly the
-four pool families.
+four pool families and `meta.visibilityGroups` reporting exactly the three
+visibility groups.
 
 ---
 
@@ -139,22 +140,24 @@ AgileOpsProd/
 │   ├── main.py                 entry point + CLI report
 │   ├── excel_reader.py         pandas read, column mapping, pool-scope filter
 │   ├── column_map.py           Excel→field map + THE pool family table (ADR-009)
+│   │                           + the visibility group table (ADR-011)
 │   ├── rules.py                late start, ratification, conflicts
-│   ├── kpi.py                  KPI counters from rule flags
-│   ├── adapter.py              Data Contract v1, window math, meta.poolOrder
+│   ├── kpi.py                  KPI counters from rule flags + per-group KPIs (ADR-011)
+│   ├── adapter.py              Data Contract v1, window math, meta.poolOrder,
+│   │                           meta.visibilityGroups
 │   └── renderer.py             writes dashboard.html / dashboard_data.json / diagnostic_report.json
 ├── web/                        the frontend, inlined verbatim into the HTML
 │   ├── dashboard_template.html
 │   ├── theme.css               design tokens, pool colours, badges
-│   ├── dashboard.js            KPIs, operational table, drawers
+│   ├── dashboard.js            visibility selector + filter, KPIs, table, drawers
 │   └── components/timeline/
 │       ├── timeline.js         CSS-Grid timeline (ADR-002), reads meta.poolOrder
 │       ├── timeline.css
 │       └── timeline.md
-├── tests/                      11 modules, 84 tests
+├── tests/                      12 modules, 120 tests
 ├── docs/
 │   ├── DATA_CONTRACT.md        the contract the engine and frontend share
-│   └── ARCHITECTURE_DECISIONS.md  ADR-001 .. ADR-010
+│   └── ARCHITECTURE_DECISIONS.md  ADR-001 .. ADR-011
 ├── README.md                   this file
 ├── workspace/
 │   ├── input/                  ControlPases.xlsx (supplied externally, not versioned)
@@ -190,10 +193,55 @@ The excluded `RECURSO` values are `INFRAESTRUCTURA` (265), `AUTOMATIZADO` (248),
 `DC_CONNECTIVITY(TELECOM)` (20), `CyberSOC` (12), `EU_NETWORKING` (6),
 `OPERACIONES DATA` (5), `SelfServices APIG` (1), `SelfServices AGIL` (1).
 
+Families roll up into the three visibility groups of the next section; the
+mapping is declared over family names, so the two tables cannot drift apart.
+
 Note that `AUTOMATIZADO` and `AUTOMATIZADO ITSM` differ by one token. Inclusion
 is an **exact match on a whitespace/case-normalized value**, never a substring
 match — see ADR-009 for why that is a correctness requirement and not a style
 preference.
+
+---
+
+## Visibility groups (ADR-011)
+
+The topbar has a **Visibilidad** selector that narrows the whole dashboard to
+one of three **visibility groups**, so somebody working a single pool family does
+not have to read the other families' passes.
+
+> **This is a presentation filter, NOT access control.** Every group's data is
+> embedded in the same generated `dashboard.html`, so anyone can read every group
+> from the file or from devtools. The `localStorage` key is a convenience, not a
+> guard. Real enforcement needs a per-group payload split or an authorising
+> backend; neither exists here. Full statement in
+> `docs/ARCHITECTURE_DECISIONS.md` (ADR-011).
+
+| # | `id` | Label | Pool families | Default |
+|---|------|-------|---------------|---------|
+| 1 | `yape` | YAPE | `Yape` | **yes** |
+| 2 | `sf` | S&F | `S&F` | no |
+| 3 | `agileops` | AgileOps | `AgileOps ORO`, `AgileOps Prod` | no |
+
+Switching a group re-renders **everything**: the timeline, the operational table,
+the four KPI cards and the three action drawers. The active group and its record
+count are shown next to the selector, scroll position and bar highlight reset,
+and a group with no results gets an explicit empty state instead of a blank
+screen.
+
+The selection is remembered in `localStorage` under
+`agileops-visibility-group`. A missing, empty, unknown or stale value falls back
+to the **first** group — `yape` today.
+
+The groups are declared as **pool families**, never as `RECURSO` values, in
+`python/column_map.py::_VISIBILITY_GROUPS`, and their `resources` lists are
+flattened from `_POOL_FAMILY_RESOURCES`. Python publishes the whole thing as
+`meta.visibilityGroups`, each entry carrying its own `kpis` and per-scope ticket
+ID sets, so **the web layer hardcodes no group and no pool**. The definitions must
+partition the four families: an orphaned or duplicated family raises
+`ValueError` at import rather than silently dropping a pool from every view.
+
+Adding a pool family therefore touches the group table too — see the next
+section.
 
 ---
 
@@ -207,7 +255,7 @@ order**, and everything else is derived from it: the inclusion whitelist, the
 family index, `POOL_FAMILY_ORDER` and the `meta.poolOrder` the frontend reads.
 Nothing in `python/` or `web/` needs a second edit.
 
-Then, for the colours only:
+Then, for the colours only, and for the visibility group that will own it:
 
 2. `web/theme.css` — declare `--color-<token>` (bar fill / badge background) and
    `--pool-accent-<token>` for **both** the light and the dark theme block.
@@ -220,9 +268,16 @@ the family name, so `S&F → sf` and `AgileOps ORO → agileops-oro` without any
 JavaScript edit. `dashboard.js` delegates to `window.Timeline.poolKey`, so the
 badge class cannot drift from the bar token.
 
-Finally, add the family to the pinned assertions in
-`tests/test_pool_scope.py` and to the `pool` enum table in
-`docs/DATA_CONTRACT.md`.
+Finally, before the pipeline will even start:
+
+5. `python/column_map.py::_VISIBILITY_GROUPS` — add the family to the group
+   that should own it. This is **required**, not optional: the group table is
+   validated as a partition at import, so a family in no group raises
+   `ValueError`. That is deliberate — a family invisible in every view is a
+   silent data loss, which is exactly the failure mode ADR-009 removed.
+6. Add the family to the pinned assertions in `tests/test_pool_scope.py`,
+   `tests/test_visibility_groups.py` and to the `pool` enum table in
+   `docs/DATA_CONTRACT.md`.
 
 ---
 

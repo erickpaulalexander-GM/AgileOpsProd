@@ -26,7 +26,7 @@ from typing import Any
 
 from adapter import compute_window, filter_to_window, to_contract
 from excel_reader import read_excel
-from kpi import update_contract_kpis
+from kpi import update_contract_kpis, update_contract_visibility_kpis
 from renderer import build_actions, render_dashboard
 from rules import apply_rules, collect_conflicts, filter_operational, is_terminal
 
@@ -118,6 +118,11 @@ def main(excel_path: str | Path = DEFAULT_EXCEL_PATH) -> dict[str, Path]:
 
     # Step 6: Calculate KPIs over the FULL in-scope set (KPI scope, no dedup)
     contract = update_contract_kpis(contract, rows_all)
+
+    # Step 6b: Per-visibility-group KPIs + action ticket scopes (ADR-011).
+    # Without this the KPI cards would keep showing the aggregate of ALL pools,
+    # leaking the hidden pools' counts through the selector.
+    contract = update_contract_visibility_kpis(contract, rows_all, rows_timeline)
 
     # Step 7: Build action payload (ADR-008) and the diagnostic report
     actions = build_actions(rows_all, rows_timeline)
@@ -295,6 +300,19 @@ def _print_report(
     print(line)
     print("  Pool order (meta.poolOrder, emitido por Python): "
           f"{', '.join(contract['meta']['poolOrder'])}")
+    groups = (contract.get("meta") or {}).get("visibilityGroups") or []
+    if groups:
+        print("  Visibility groups (meta.visibilityGroups, ADR-011):")
+        for group in groups:
+            kpis = group.get("kpis") or {}
+            tickets = group.get("tickets") or {}
+            print(f"    {group['id']:<10} {group['label']:<10} "
+                  f"familias={', '.join(group['families'])}  "
+                  f"pases_en_ventana={len(tickets.get('passesInWindow', []))}  "
+                  f"atrasados={kpis.get('lateStarts', 0)}  "
+                  f"rati_por_vencer={kpis.get('ratificationsSoon', 0)}  "
+                  f"rati_vencidas={kpis.get('ratificationsExpired', 0)}")
+        print("    (filtro de presentacion, NO control de acceso - ver ADR-011)")
     print(line)
     print("  Frontend: dashboard.js (tabla operativa); theme.css y timeline intactos.")
     print("  ADR-005 corregido (v1.1.3): referencia temporal única = mtime del Excel.")

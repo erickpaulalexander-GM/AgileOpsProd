@@ -7,6 +7,11 @@ and punctuation. This module maps them to clean internal names.
 Operational scope: the 4 AgileOps Prod pool families (Yape, S&F,
 AgileOps ORO, AgileOps Prod). The pool list lives HERE and only here —
 adapter.py imports it, so there is a single source of truth.
+
+Those 4 families are grouped into 3 pool VISIBILITY GROUPS (ADR-011) at the
+bottom of this module. The groups are declared as family names, so they sit on
+top of the pool scope and can never drift from it. A visibility group is a
+presentation filter, NOT access control.
 """
 
 from __future__ import annotations
@@ -203,3 +208,155 @@ def get_pool_name(recurso: Any) -> str:
             return family
 
     return str(recurso).title()
+
+
+# ---------------------------------------------------------------
+# Pool VISIBILITY GROUPS — a presentation layer ON TOP of the pool scope
+# (ADR-011)
+# ---------------------------------------------------------------
+# A visibility group is the unit a dashboard user selects: it bundles one or
+# more pool FAMILIES so a person working a single pool is not shown the other
+# pools' passes.
+#
+# THIS IS NOT ACCESS CONTROL. Every group's data is embedded in the single
+# generated dashboard.html, so all groups remain readable from devtools. See
+# ADR-011 for what real enforcement would require.
+#
+# The table below declares FAMILIES, never RECURSO values. The resource list of
+# each group is flattened from _POOL_FAMILY_RESOURCES, so a group can never
+# drift from the pool scope, and it cannot smuggle in a value the whitelist
+# does not already accept.
+
+# (group id, display label, pool families in this group)
+_VISIBILITY_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("yape", "YAPE", ("Yape",)),
+    ("sf", "S&F", ("S&F",)),
+    # One group over two existing families — expressed as family names so the
+    # definition cannot drift from the pool table above.
+    ("agileops", "AgileOps", ("AgileOps ORO", "AgileOps Prod")),
+)
+
+
+def _build_visibility_groups(
+    families: tuple[str, ...],
+    table: tuple[tuple[str, str, tuple[str, ...]], ...],
+) -> list[dict[str, Any]]:
+    """
+    Validate a visibility-group table against the family table and project it
+    into the meta.visibilityGroups shape.
+
+    Raises ValueError when the table is not a clean partition of `families`:
+    an orphaned family (invisible in every group = silently lost data), a
+    duplicated family, an unknown family, a duplicated id or an empty group.
+    A malformed visibility definition is a visible data defect, never a silent
+    render drop.
+
+    Returns:
+        A list of {"id", "label", "families", "resources"} dicts, in the
+        declared order. Callers own the returned object; it is rebuilt per call
+        so a consumer cannot mutate module state.
+    """
+    known = list(families)
+    seen_ids: set[str] = set()
+    seen_families: set[str] = set()
+    projected: list[dict[str, Any]] = []
+
+    for group_id, label, group_families in table:
+        if not group_id:
+            raise ValueError("visibility group with an empty id")
+        if group_id in seen_ids:
+            raise ValueError(f"duplicate visibility group id: {group_id!r}")
+        if not label:
+            raise ValueError(f"visibility group {group_id!r} has an empty label")
+        if not group_families:
+            raise ValueError(f"visibility group {group_id!r} has no pool family")
+
+        seen_ids.add(group_id)
+        for family in group_families:
+            if family not in known:
+                raise ValueError(
+                    f"visibility group {group_id!r} names an unknown pool family: "
+                    f"{family!r}"
+                )
+            if family in seen_families:
+                raise ValueError(
+                    f"pool family {family!r} appears in more than one visibility group"
+                )
+            seen_families.add(family)
+
+        # Resources come from the family table, never from the group table.
+        resources = [
+            recurso
+            for family in group_families
+            for recurso in _FAMILY_TO_RESOURCES[family]
+        ]
+        projected.append(
+            {
+                "id": group_id,
+                "label": label,
+                "families": list(group_families),
+                "resources": resources,
+            }
+        )
+
+    missing = [family for family in known if family not in seen_families]
+    if missing:
+        raise ValueError(
+            "pool family with no visibility group (it would be invisible in "
+            f"every view): {', '.join(missing)}"
+        )
+
+    return projected
+
+
+# Pool family → its RECURSO values, so a group can derive its resources.
+_FAMILY_TO_RESOURCES: dict[str, tuple[str, ...]] = {
+    family: recursos for family, recursos in _POOL_FAMILY_RESOURCES
+}
+
+# Validated once at import: the table must partition the family table exactly.
+VISIBILITY_GROUPS: tuple[dict[str, Any], ...] = tuple(
+    _build_visibility_groups(POOL_FAMILY_ORDER, _VISIBILITY_GROUPS)
+)
+
+# Group ids in declaration order. The first one is the dashboard default:
+# there is no safe universal default, so the FIRST group wins (ADR-011).
+VISIBILITY_GROUP_IDS: tuple[str, ...] = tuple(
+    group["id"] for group in VISIBILITY_GROUPS
+)
+
+
+def visibility_groups() -> list[dict[str, Any]]:
+    """
+    The visibility groups as plain data, for meta.visibilityGroups.
+
+    Returns a fresh, fully-owned list on every call: the caller may serialize it
+    into the contract or mutate it without touching module state.
+    """
+    return [
+        {
+            "id": group["id"],
+            "label": group["label"],
+            "families": list(group["families"]),
+            "resources": list(group["resources"]),
+        }
+        for group in VISIBILITY_GROUPS
+    ]
+
+
+# Pool family → visibility group id. The reverse direction of a group.
+_FAMILY_TO_VISIBILITY_GROUP: dict[str, str] = {
+    family: group["id"] for group in VISIBILITY_GROUPS for family in group["families"]
+}
+
+
+def get_visibility_group(recurso: Any) -> str:
+    """
+    Resolve a RECURSO value to its visibility group id, or "" when it is
+    outside the pool scope entirely.
+
+    Resolution goes through get_pool_name() so a value always lands in the same
+    group as its family, whatever its spelling. Note that grouping never widens
+    inclusion: an out-of-scope value resolves to "" and belongs to no group.
+    """
+    return _FAMILY_TO_VISIBILITY_GROUP.get(get_pool_name(recurso), "")

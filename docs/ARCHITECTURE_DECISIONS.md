@@ -478,5 +478,143 @@ are no `.bat` launchers to set it (see `workspace/input/dev-report.txt`).
   (`TEMPLATE_TITLE_TAG`). If `web/dashboard_template.html` changes that tag, the
   renderer logs a warning and the HTML keeps the raw title.
 
+## ADR-011 Pool visibility groups - a presentation filter, not access control
 
+The dashboard lets the reader switch between **visibility groups**: YAPE,
+S&F and AgileOps. Every consumer of operational data - the Timeline, the
+table, the four KPI cards and the three action drawers - renders **only** the
+active group's rows.
 
+**This is a presentation filter. It is not access control, and it is not
+security.** This ADR states that limitation in the decision itself so it can
+never be misread downstream.
+
+### Problem
+
+A person working a single pool family does not need - or want - the other
+families' passes on screen. Before this decision there was one view with all
+four families, and no way to narrow it.
+
+The tempting fix is a filter over the rendered rows. That fix alone is
+insufficient and, worse, dishonest: the KPI cards aggregate `meta.kpis`, which
+is global, and the action drawers read `window.ChangeOpsActions`, which is one
+global payload whose records carry no pool field at all (ADR-008). A row-level
+filter would therefore have produced a screen where the bars were YAPE-only
+while the "Atrasados: 3" card still counted AgileOps' late starts - a
+dashboard that lies about the data it is showing.
+
+### Decision
+
+**1. The groups are declared in `python/column_map.py` as pool FAMILIES, never
+as `RECURSO` values.**
+
+```python
+_VISIBILITY_GROUPS = (
+    ("yape",     "YAPE",     ("Yape",)),
+    ("sf",       "S&F",      ("S&F",)),
+    ("agileops", "AgileOps", ("AgileOps ORO", "AgileOps Prod")),
+)
+```
+
+Each group's `resources` list is **flattened from the existing
+`_POOL_FAMILY_RESOURCES` table**, so there is no second `RECURSO` literal list
+anywhere and a group cannot smuggle in a value the pool whitelist does not
+already accept. This is the principle of ADR-009, applied one level up.
+
+**2. The group table is validated as a PARTITION, once at import.**
+
+`_build_visibility_groups(POOL_FAMILY_ORDER, _VISIBILITY_GROUPS)` raises
+`ValueError` on an orphaned family (invisible in every view = silently lost
+data), a duplicated family, an unknown family, a duplicated id, an empty id or
+label, or an empty group. A malformed visibility definition must be a loud data
+defect at startup, never a silent render drop - the exact failure ADR-009 was
+written to eliminate.
+
+**3. Python publishes the groups AND their aggregates; the web layer hardcodes
+nothing.**
+
+| Contract location | Content | Emitted by |
+|---|---|---|
+| `meta.visibilityGroups[]` | `id`, `label`, `families`, `resources` | `adapter.to_contract()` |
+| `meta.visibilityGroups[].kpis` | `lateStarts`, `ratificationsSoon`, `ratificationsExpired`, `reversions` | `kpi.update_contract_visibility_kpis()` |
+| `meta.visibilityGroups[].tickets` | ticket ID sets per action scope | `kpi.update_contract_visibility_kpis()` |
+
+The global `meta.kpis` **stays**: it is the contract's overall aggregate and
+other consumers may read it.
+
+Per-group `kpis` is not optional. Without it the cards cannot be scoped, and a
+scoped table next to a global card is the lie described above.
+
+**4. The drawers are scoped by ticket membership, not by duplicated records.**
+
+`window.ChangeOpsActions` is one global payload (ADR-008) whose records have no
+pool field. Rather than republishing per-group copies - which would let two
+copies of one record drift - the contract publishes, per group, the ticket ID
+sets `passesInWindow`, `lateStarts`, `ratificationsSoon` and
+`ratificationsExpired`. The web layer filters the global payload by
+membership. One copy of the record data; every drawer scoped.
+
+**5. One render pass reads one view object.**
+
+`web/dashboard.js::_groupView()` builds the single object every consumer reads:
+
+```
+{ kpis, timeline, table, actions, barCount, rowCount }
+```
+
+`_applyGroup()` is the only render pass. `renderKPIs`, `_onKPIClick`,
+`renderTable`, `_buildTableIndex` and `Timeline.init` all take their input from
+that object, so no render function can accidentally read the unfiltered
+contract. The Timeline is re-`init`ed with the filtered contract - it rebuilds
+`_allBars` / `_rowMetrics` / `_poolOrder` internally, and
+`web/components/timeline/*` was not modified.
+
+**6. Default and persistence.**
+
+The default is the **FIRST** declared group (`yape`). There is no safe
+universal default - no group is more privileged than another - so declaration
+order decides, and it is decided in Python, not in the browser. The choice is
+persisted to `localStorage` under `agileops-visibility-group`; a missing,
+empty, unknown or stale value falls back to the first group. Because
+`storageGet()` is wrapped in a `try` (SharePoint sandbox, see the file header),
+a `localStorage` that throws degrades to the first group rather than breaking
+the page.
+
+**7. Degradation is explicit.**
+
+A contract without `meta.visibilityGroups` (an older generated file) is left
+untouched by Python, and a group whose `tickets` object is malformed makes the
+web layer log `console.error` and fall back to the **unfiltered** payload
+rather than show an empty drawer. Hiding real data would be worse than showing
+all of it.
+
+### The limitation, stated plainly
+
+| Property | Reality |
+|---|---|
+| Data at rest | **All** groups' rows and records are embedded in the single generated `dashboard.html` and `dashboard_data.json`. |
+| Devtools / source view | Any reader can read every group's data, including the groups not selected. |
+| Transport | One file, one payload. There is no server and no per-user session. |
+| `localStorage` | A convenience, not a guard. It is user-writable and trivial to bypass. |
+
+Real enforcement would need a different architecture: split the payload per
+group, or serve it from a backend that authorises the caller and returns only
+the rows that caller may see. Neither exists here.
+
+**Do not describe this feature as restricting access, as "role-based
+visibility", or as anything that protects data.** It narrows what is rendered.
+
+### Consequences
+
+- Every consumer had to be routed explicitly, and a missed one is a silent
+  leak: a card or drawer reading global data while the rest of the screen is
+  filtered. `tests/test_visibility_groups.py` and the three-group union
+  assertion exist to catch exactly that.
+- `meta.visibilityGroups` is now part of the contract.
+  `docs/DATA_CONTRACT.md` documents it; a v1 consumer that ignores it still
+  works, because Python keeps `meta.kpis` and the web layer degrades when the
+  key is absent.
+- The group definition is a **partition**, so the union of the three groups'
+  records equals the full in-scope dataset. That is asserted in tests, and the
+  global KPI object is not always the sum of the groups: rows outside every
+  group (i.e. outside the pool whitelist) contribute to the global object only.
