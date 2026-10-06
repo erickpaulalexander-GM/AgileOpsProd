@@ -247,19 +247,6 @@ body {
   white-space: nowrap;
 }
 
-/* ADR-011 limitation note — visible, factual, not alarming. */
-.pool-group-note {
-  margin: 0;
-  padding: 8px 12px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-left: 3px solid var(--border-strong);
-  border-radius: var(--card-radius);
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
 /* ----------------------------------------------  zero-result states (ADR-011)
    Deliberately neutral styling: an empty group is an expected outcome, never an
    error. */

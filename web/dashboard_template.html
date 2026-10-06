@@ -23,8 +23,7 @@
              with no ARIA juggling. -->
         <div class="pool-group" id="pool-group">
           <label class="pool-group__label" for="pool-group-select">Pool</label>
-          <select class="pool-group__select" id="pool-group-select"
-                  aria-describedby="pool-group-note"></select>
+          <select class="pool-group__select" id="pool-group-select"></select>
           <span class="pool-group__badge" id="pool-group-badge"></span>
           <span class="pool-group__counts" id="pool-group-counts"
                 role="status" aria-live="polite"></span>
@@ -34,16 +33,6 @@
         <button class="theme-toggle" id="theme-toggle" aria-label="Cambiar tema">🌙</button>
       </div>
     </header>
-
-    <!-- ============ ADR-011 LIMITATION NOTE ============
-         The selector is a PRESENTATION FILTER, not access control: every
-         group's data is embedded in this same file. Said plainly, in the UI,
-         next to the selector, so nobody mistakes it for enforcement. -->
-    <p class="pool-group-note" id="pool-group-note">
-      Filtro de presentación: los datos de los demás pools siguen en este mismo
-      archivo y son legibles con las herramientas de desarrollo. No es un control
-      de acceso.
-    </p>
 
     <!-- KPI CARDS — 4 slots, populated by dashboard.js -->
     <section class="kpi-section" id="kpi-section">

@@ -140,8 +140,9 @@ theme, and the whole `excel_reader`/`column_map` date parsing.
 - [ ] `column_map.py`: 3 visibility groups declared as pool families, partition-validated at import
 - [ ] Per-group KPIs and ticket id sets emitted from Python
 - [ ] Web selector in the topbar, filtered timeline + table + KPIs + drawer
-- [ ] `localStorage` persistence with fallback, empty state, active-group indicator
-- [ ] ADR-011 and the honest limitation recorded in UI, contract and README
+- [x] `localStorage` persistence with fallback, empty state, active-group indicator
+- [x] ADR-011 and the limitation recorded in the contract and the README
+- [x] UI note removed on request — the selector now uses that vertical space
 - Route: delegated writer
 
 ## Authorized edit surfaces
@@ -223,13 +224,14 @@ T7 verification (independently re-checked by the parent, not just reported):
 | Group `ratificationsExpired` sum to the global KPI | 24 == 24 |
 | No ticket crosses two groups | verified — the 2 apparent dupes are duplicate ROWS within `agileops`, same ticket + same pool, different `responsable` (pre-existing "one row per record, no dedup") |
 | `pytest -q` | 120 passed, 0 failed |
-| ADR-011 limitation note present in the generated UI | Yes |
+| UI note | **Removed on request.** The on-screen limitation note no longer exists; the selector uses that vertical space. The record lives in ADR-011, `DATA_CONTRACT.md` and the README. |
 
 **The limitation, stated plainly:** this is a presentation filter and NOT access control. All
 three groups are embedded as JSON in the same `dashboard.html`, so any reader can see every
 group via devtools. There is no server, no users and no sessions. The product owner was told
-this before choosing it. If the restriction must ever be enforced, the fix is one artifact per
-pool, or a backend that authorises the caller. Recorded as ADR-011.
+this before choosing it, and later chose to remove the on-screen note to reclaim the space.
+The limitation is therefore recorded in the written record only — ADR-011, `DATA_CONTRACT.md`
+and the README — and is no longer visible to a reader of the dashboard itself.
 
 ### Verification evidence
 
