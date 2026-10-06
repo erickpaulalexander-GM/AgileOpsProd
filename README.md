@@ -55,11 +55,14 @@ The workbook **must be placed at `workspace/input/ControlPases.xlsx`**. That is
 the default input path and the layout the code expects.
 
 ```powershell
-# Default input — no arguments needed
+# Default input — no arguments needed (this is what Task Scheduler runs)
 .\.venv-win\Scripts\python.exe python\main.py
 
 # Explicit input path (output directory is always workspace/output)
 .\.venv-win\Scripts\python.exe python\main.py "D:\somewhere\else\ControlPases.xlsx"
+
+# Reproduce a run exactly by pinning the run clock (window -> 09:00 .. 17:00)
+.\.venv-win\Scripts\python.exe python\main.py --now "2026-10-06 09:55"
 ```
 
 Both default paths resolve from the **repository root**, not from the current
@@ -67,6 +70,56 @@ working directory, so the pipeline runs correctly from any directory — includi
 Task Scheduler on the client machine, where the "Start in" folder is not the
 repo. This is ADR-010; how to prove it is in
 [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md).
+
+### The timeline window is anchored to the run clock (ADR-012)
+
+The 8-hour timeline window starts at the **floor of the clock when the pipeline
+runs**, not at the Excel file's modification time:
+
+| Run at | Window |
+|--------|--------|
+| `09:55` | `09:00 → 17:00` |
+| `21:40` | `21:00 → 05:00` |
+
+The Excel mtime is a **copy artifact** (when the file landed on the machine),
+not when its data changed, so it is reported only in
+`diagnostic_report.json` as `excelFileMtime` and never drives the window. See
+ADR-012 in [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md)
+(which supersedes ADR-005's anchor).
+
+A clock-anchored run is not deterministic, so a run can be pinned with `--now`:
+
+```powershell
+# --now accepts "YYYY-MM-DD HH:MM", "YYYY-MM-DDTHH:MM", "DD/MM/YYYY HH:MM"
+# or a bare "HH:MM" (today). An unparseable value fails loudly, never silently.
+.\.venv-win\Scripts\python.exe python\main.py --now "2026-10-06 09:55"
+```
+
+`diagnostic_report.json::updatedAtSource` records `"run_clock"` for an organic
+run and `"now_override"` when `--now` was supplied.
+
+### Windows Task Scheduler
+
+The pipeline is designed to be run by Task Scheduler on the client machine. It
+resolves its own paths (ADR-010) and needs no `.bat` launcher (those are blocked
+there). Create a daily task with `schtasks` from an elevated prompt — quote the
+whole `/TR` value and use the venv's Python directly:
+
+```cmd
+schtasks /Create /TN "AgileOps Prod Console" /SC DAILY /ST 09:55 /TR "\"D:\IA_DEV\AgileOpsProd\.venv-win\Scripts\python.exe\" \"D:\IA_DEV\AgileOpsProd\python\main.py\""
+```
+
+- `/ST 09:55` is when the task runs; if it runs at 09:55, the window starts at
+  `09:00`.
+- The "Start in" directory does not matter — every path resolves from the
+  repository root.
+- To run it now without waiting for the schedule: `schtasks /Run /TN "AgileOps
+  Prod Console"`.
+- To inspect or remove it: `schtasks /Query /TN "AgileOps Prod Console" /V /FO
+  LIST` and `schtasks /Delete /TN "AgileOps Prod Console" /F`.
+
+Output lands in `D:\IA_DEV\AgileOpsProd\workspace\output\` (`dashboard.html`,
+`dashboard_data.json`, `diagnostic_report.json`).
 
 ### No `.bat` launchers
 
@@ -109,7 +162,7 @@ Three files, written to `workspace/output/`:
 ```powershell
 cd D:\IA_DEV\AgileOpsProd
 
-.\.venv-win\Scripts\python.exe -m pytest -q          # expect: 120 passed
+.\.venv-win\Scripts\python.exe -m pytest -q          # expect: 137 passed
 .\.venv-win\Scripts\python.exe -m ruff check .       # expect: All checks passed!
 
 node --check web\components\timeline\timeline.js    # expect: exit 0, no output
@@ -154,10 +207,10 @@ AgileOpsProd/
 │       ├── timeline.js         CSS-Grid timeline (ADR-002), reads meta.poolOrder
 │       ├── timeline.css
 │       └── timeline.md
-├── tests/                      12 modules, 120 tests
+├── tests/                      13 modules, 137 tests
 ├── docs/
 │   ├── DATA_CONTRACT.md        the contract the engine and frontend share
-│   └── ARCHITECTURE_DECISIONS.md  ADR-001 .. ADR-011
+│   └── ARCHITECTURE_DECISIONS.md  ADR-001 .. ADR-012
 ├── README.md                   this file
 ├── workspace/
 │   ├── input/                  ControlPases.xlsx (supplied externally, not versioned)
@@ -283,14 +336,18 @@ Finally, before the pipeline will even start:
 
 ## Reading the output
 
-`dashboard_data.json` is the contract; `docs/DATA_CONTRACT.md` is its spec. Two
-entries in `diagnostic_report.json` are worth watching after any change:
+`dashboard_data.json` is the contract; `docs/DATA_CONTRACT.md` is its spec.
+Entries in `diagnostic_report.json` are worth watching after any change:
 
-- `timelineScope` — bars in / out of the dynamic 8-hour window, and the per-pool
-  split.
+- `timelineScope` — bars in / out of the dynamic 8-hour window (anchored to the
+  run clock, ADR-012), and the per-pool split.
 - `kpiScope` — how many in-scope rows were evaluated vs. how many were excluded
   as terminal, with a per-state breakdown, plus the conflict and late-start
   counts.
+- `updatedAtSource` — `"run_clock"` or `"now_override"`, i.e. whether the run
+  was organic or pinned with `--now`.
+- `excelFileMtime` — the workbook's mtime, kept for diagnostics only; it never
+  drives the window.
 
 Both are scoped differently from each other on purpose: the **timeline** shows
 the 8-hour slice, the **table** shows the live operational universe, and the

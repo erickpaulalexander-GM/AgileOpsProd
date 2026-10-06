@@ -1,6 +1,11 @@
 """
 Tests for the operational table scope: resource whitelist, state exclusion,
-live-work temporal filter, and updatedAt from the Excel file mtime.
+and the live-work temporal filter.
+
+ADR-012: ``meta.updatedAt`` is the RUN CLOCK, not the Excel mtime. The Excel
+mtime survives only as a diagnostic helper (``file_mtime_iso``) and never
+anchors the window or the table filter; the run-clock tests live in
+tests/test_run_clock.py.
 
 The resource whitelist is sourced from column_map (single source of truth).
 The exhaustive whitelist / rejection matrix lives in test_pool_scope.py;
@@ -237,9 +242,14 @@ def test_temporal_filter_none_keeps_all():
 
 
 # ---------------------------------------------------------------
-# updatedAt from file mtime
+# Excel mtime — DIAGNOSTIC ONLY (ADR-012: it no longer anchors updatedAt)
 # ---------------------------------------------------------------
-def test_file_mtime_iso(tmp_path):
+def test_file_mtime_iso_is_a_diagnostic_helper(tmp_path):
+    """The helper still exists but feeds only diagnostic_report.json.
+
+    The window and meta.updatedAt are anchored to the run clock; this function
+    must never be used to derive them. See tests/test_run_clock.py.
+    """
     f = tmp_path / "ControlPases.xlsx"
     f.write_bytes(b"x")
     ts = 1_760_000_000
@@ -257,4 +267,4 @@ if __name__ == "__main__":
     test_build_operational_table_filters_and_sorts()
     test_build_operational_table_keeps_columns()
     test_build_operational_table_empty()
-    print("All operational-table tests passed (mtime test needs pytest tmp_path).")
+    print("All operational-table tests passed (mtime helper test needs pytest tmp_path).")

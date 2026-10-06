@@ -4,10 +4,11 @@ Adapter: converts normalized Excel rows to Data Contract v1.
 ADR-004: All times are converted to minutes from window start.
          The frontend never parses "HH:MM" strings for positioning.
 
-ADR-005: The 8-hour window is anchored dynamically to the LAST EXCEL UPDATE
-         (proxy: max "FECHA DE REGISTRO"), floored to the hour. The window
-         size stays fixed at 8h; only its start moves with the data.
-         See docs/ARCHITECTURE_DECISIONS.md (ADR-005).
+ADR-012 (supersedes ADR-005's anchor): The 8-hour window is anchored
+         dynamically to the RUN CLOCK (the system time at run, or an explicit
+         --now override), floored to the hour. The window size stays fixed at
+         8h; only its start moves. The Excel mtime is diagnostic only.
+         See docs/ARCHITECTURE_DECISIONS.md (ADR-012).
 
 Pool scope: the whitelist and the pool family table live in column_map.py.
              This module imports them — it never re-declares a pool value.
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 # _norm_key is the historical private name used by the call sites below.
 _norm_key = normalize_recurso
 
-# Window configuration (ADR-005)
+# Window configuration (ADR-012)
 WINDOW_HOURS = 8
 WINDOW_MINUTES = 480  # 8 hours
 
@@ -50,11 +51,12 @@ def floor_to_hour(dt: datetime) -> datetime:
 def compute_window(reference_dt: datetime) -> dict[str, Any]:
     """
     Compute the dynamic 8h window anchored to the SINGLE temporal reference
-    (ADR-005, corrected in v1.1.3).
+    (ADR-012, which supersedes ADR-005's Excel-mtime anchor).
 
-    The anchor is `meta.updatedAt` — the Excel file modification time
-    (`Path(excel_path).stat().st_mtime`) — floored to the hour.
-    Window end = anchor + 8h.
+    The anchor is `reference_dt` — the RUN CLOCK captured once in
+    `main.main()` (or the explicit `--now` override) — floored to the hour.
+    Window end = anchor + 8h. The Excel mtime is never passed here; it is
+    diagnostic information only.
 
     Returns a dict:
         {
@@ -62,7 +64,7 @@ def compute_window(reference_dt: datetime) -> dict[str, Any]:
           "end": datetime,        # window end (start + 8h)
           "start_hhmm": "HH:MM",
           "end_hhmm": "HH:MM",
-          "updated_at": datetime, # the reference stamp (mtime)
+          "updated_at": datetime, # the reference stamp (run clock)
         }
     """
     start = floor_to_hour(reference_dt)
@@ -77,7 +79,7 @@ def compute_window(reference_dt: datetime) -> dict[str, Any]:
     }
 
     logger.info(
-        "ADR-005 window anchored to %s → [%s, %s]",
+        "ADR-012 window anchored to %s → [%s, %s]",
         reference_dt.isoformat(sep=" "),
         window["start_hhmm"],
         window["end_hhmm"],
@@ -91,7 +93,7 @@ def filter_to_window(
     window: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], int]:
     """
-    Keep only rows whose implementation START falls inside the window (ADR-005).
+    Keep only rows whose implementation START falls inside the window (ADR-012).
 
     Returns:
         (kept_rows, dropped_count)
@@ -267,7 +269,7 @@ def build_operational_table(
     - Exact resource whitelist (column_map, normalized for spacing/case).
     - Excludes the configured states.
     - Keeps only LIVE work — rows whose FEC. HORA. FIN. IMPL is not
-      before `reference_dt` (the file mtime). Finished implementations drop out.
+      before `reference_dt` (the run reference). Finished implementations drop out.
     - The entry name is NOMBRE APP.
     - One row per record (no dedup). Sorted by planned start (ascending).
     """
@@ -318,17 +320,28 @@ def to_contract(
     Convert normalized Excel rows to Data Contract v1.
 
     Args:
-        rows: In-window normalized rows (already filtered by ADR-005)
+        rows: In-window normalized rows (already filtered by the window)
         diagnostic: Optional diagnostic data (unused here, kept for API)
-        window: Window dict from compute_window()
+        window: Window dict from compute_window(). REQUIRED — see below.
 
     Returns:
         dict conforming to DATA_CONTRACT.md
+
+    Raises:
+        ValueError: when `window` is None. There is intentionally NO fallback:
+            an internal `compute_window(datetime.now())` used to read the wall
+            clock while the caller used the Excel mtime, i.e. two temporal
+            references in one contract. Every caller now passes the window
+            computed once from the single run reference (ADR-012), so a missing
+            window is a programming error and must fail loudly.
     """
     if window is None:
-        # Last-resort fallback; callers must pass the window computed from
-        # the single temporal reference (meta.updatedAt = Excel mtime).
-        window = compute_window(datetime.now())
+        raise ValueError(
+            "to_contract() requires a `window` computed from the single run "
+            "reference (ADR-012): pass compute_window(reference_dt). The old "
+            "datetime.now() fallback was a second temporal reference and was "
+            "removed on purpose."
+        )
     wstart = window["start"]   # datetime — day-aware minutes
 
     # Timeline groups keep the display pool FAMILY resolved from the real
@@ -438,7 +451,7 @@ def _compute_start_duration(
 
 
 def _row_to_bar(row: dict[str, Any], window_start: str) -> dict[str, Any] | None:
-    """Convert a single row to a timeline bar (ADR-004/ADR-005 minutes)."""
+    """Convert a single row to a timeline bar (ADR-004 minutes, ADR-012 window)."""
     ticket = row.get("ticket", "")
     if not ticket:
         return None

@@ -1,5 +1,5 @@
 """
-Test for late start rule in rules.py (corrected semantics, ADR-005 reference).
+Test for late start rule in rules.py (corrected semantics, ADR-012 reference).
 
 Rule: Inicio atrasado
     - Estado == "Coordinado"

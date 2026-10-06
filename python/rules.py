@@ -4,8 +4,10 @@ Business rules: late starts, ratifications, conflicts.
 Rules operate on the in-scope pool rows (see column_map) and annotate flags
 consumed by the adapter (status) and kpi.py (counts).
 
-ADR-005: the temporal reference is the "Actualizado" stamp (meta.updatedAt),
-         never the wall clock — deterministic per Excel.
+ADR-012 (supersedes ADR-005's anchor): the temporal reference is
+         meta.updatedAt, which is now the RUN CLOCK captured once per run (or
+         the explicit --now override). The Excel mtime is diagnostic only and
+         never reaches these rules.
 ADR-006: TERMINAL states (Cerrado, Terminado Satisfactorio, Rechazado,
          Cancelado, Anulado, Registrado and equivalents) are EXCLUDED from the
          operational KPIs and from conflict detection. They never produce

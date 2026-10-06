@@ -3,7 +3,12 @@ Main entry point: runs the complete AgileOps Prod pipeline.
 
 Excel → excel_reader → adapter → rules → kpi → renderer → workspace/output/
 
-ADR-005: the 8h window is anchored dynamically to the last Excel update.
+ADR-012 (supersedes ADR-005's Excel-mtime anchor): the 8h window is anchored
+to the RUN CLOCK — the system time at which the pipeline runs — because the
+dashboard is executed by Windows Task Scheduler. The Excel mtime is a copy
+artifact (when the file landed on the machine), so it is kept in the
+diagnostic report ONLY and never anchors the window. A run can be reproduced
+exactly with ``--now "YYYY-MM-DD HH:MM"``.
 
 TWO SCOPES (explicit):
   - Timeline scope : only bars whose implementation start is inside the
@@ -18,6 +23,7 @@ The frontend (web/*) is FROZEN and consumes only Data Contract v1.
 
 from __future__ import annotations
 
+import argparse
 import logging
 import sys
 from datetime import datetime
@@ -65,12 +71,116 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def main(excel_path: str | Path = DEFAULT_EXCEL_PATH) -> dict[str, Path]:
+def _now() -> datetime:
+    """The real system clock.
+
+    Isolated behind a function so a run is reproducible: tests (and the CLI
+    ``--now``) can swap or bypass the clock without touching the pipeline.
+    """
+    return datetime.now()
+
+
+def _resolve_reference_now(reference_now: datetime | None) -> datetime:
+    """The SINGLE temporal reference of a run.
+
+    Returns the explicit override when one was supplied, otherwise the real
+    system clock. Every downstream consumer (window, rules, table filter,
+    meta.updatedAt) flows from this one value.
+    """
+    return reference_now if reference_now is not None else _now()
+
+
+# Accepted ``--now`` formats, most specific first. The bare "%H:%M" form is
+# resolved against today's date so a quick manual replay is possible.
+_NOW_FORMATS: tuple[str, ...] = (
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d %H:%M",
+    "%Y-%m-%dT%H:%M:%S",
+    "%Y-%m-%dT%H:%M",
+    "%d/%m/%Y %H:%M",
+    "%H:%M",
+)
+
+
+def _parse_now(value: str) -> datetime:
+    """Parse the CLI ``--now`` override into a datetime.
+
+    Forgiving about the separator (``2026-10-06 09:55`` and
+    ``2026-10-06T09:55`` both work). An unparseable value raises
+    ``argparse.ArgumentTypeError`` so the CLI fails LOUDLY instead of silently
+    falling back to the clock.
+    """
+    text = str(value).strip()
+    for fmt in _NOW_FORMATS:
+        try:
+            parsed = datetime.strptime(text, fmt)
+        except ValueError:
+            continue
+        if fmt == "%H:%M":
+            today = datetime.now()
+            parsed = parsed.replace(
+                year=today.year, month=today.month, day=today.day
+            )
+        return parsed
+    raise argparse.ArgumentTypeError(
+        f"invalid --now value {value!r}; "
+        'expected e.g. "2026-10-06 09:55"'
+    )
+
+
+def _build_arg_parser() -> argparse.ArgumentParser:
+    """CLI: ``main.py [excel_path] [--now DATETIME]``."""
+    parser = argparse.ArgumentParser(
+        prog="main.py",
+        description="Generate the AgileOps Prod dashboard from an Excel workbook.",
+    )
+    parser.add_argument(
+        "excel_path",
+        nargs="?",
+        default=str(DEFAULT_EXCEL_PATH),
+        help=(
+            "Path to the Excel workbook "
+            "(default: workspace/input/ControlPases.xlsx)."
+        ),
+    )
+    parser.add_argument(
+        "--now",
+        dest="reference_now",
+        type=_parse_now,
+        default=None,
+        metavar="DATETIME",
+        help=(
+            "Override the run clock, e.g. --now \"2026-10-06 09:55\". "
+            "Without it the real system clock anchors the window."
+        ),
+    )
+    return parser
+
+
+def cli(argv: list[str] | None = None) -> int:
+    """Parse CLI arguments and run the pipeline. Returns the exit code.
+
+    ``python/main.py`` (no arguments) keeps working: the default input path is
+    resolved from the repository root (ADR-010), which is the form Task
+    Scheduler uses.
+    """
+    args = _build_arg_parser().parse_args(argv)
+    main(args.excel_path, reference_now=args.reference_now)
+    return 0
+
+
+def main(
+    excel_path: str | Path = DEFAULT_EXCEL_PATH,
+    reference_now: datetime | None = None,
+) -> dict[str, Path]:
     """
     Run the complete AgileOps Prod pipeline.
 
     Args:
         excel_path: Path to the Excel file to process
+        reference_now: Explicit temporal reference for the whole run. When
+            None (the default), the real system clock is used. Supplying it
+            is how a run is reproduced exactly — the CLI ``--now`` flag.
 
     Returns:
         dict with output file paths
@@ -83,18 +193,21 @@ def main(excel_path: str | Path = DEFAULT_EXCEL_PATH) -> dict[str, Path]:
     diagnostic = data["diagnostic"]
     logger.info("Read %d in-scope rows (KPI scope)", len(rows_all))
 
-    # v1.1.1: displayed "Actualización" = the Excel file modification time.
-    # v1.1.2: this same timestamp filters the operational table (live work only).
-    updated_at_dt = datetime.fromtimestamp(Path(excel_path).stat().st_mtime)
-    updated_at_display = updated_at_dt.strftime("%Y-%m-%dT%H:%M:%S")
-    logger.info("File mtime (displayed updatedAt): %s", updated_at_display)
+    # ADR-012: the SINGLE temporal reference of the whole dashboard is the run
+    # clock, captured ONCE here. Every downstream consumer — the window, the
+    # rules' reference_now, the table's live-work filter and meta.updatedAt —
+    # flows from this one value. The Excel mtime is NOT a reference; it is
+    # reported separately in the diagnostic so a stale file can be spotted.
+    anchor_dt = _resolve_reference_now(reference_now)
+    updated_at_display = anchor_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    logger.info("Run reference (meta.updatedAt): %s", updated_at_display)
 
-    # Step 2: Compute dynamic window (ADR-005). v1.1.3: the single temporal
-    # reference is the file mtime (meta.updatedAt), same as the header and table.
-    window = compute_window(updated_at_dt)
+    # Step 2: Compute the dynamic 8h window (ADR-012) from that single
+    # reference. The window is the floor of the run clock.
+    window = compute_window(anchor_dt)
 
-    # Step 3: Apply business rules over the FULL in-scope set, using the
-    #         snapshot reference (meta.updatedAt) — this is the KPI scope.
+    # Step 3: Apply business rules over the FULL in-scope set, using the run
+    #         reference (meta.updatedAt) — this is the KPI scope.
     rows_all = apply_rules(rows_all, reference_now=window["updated_at"])
 
     # Step 4: Timeline scope = only rows whose impl start is inside the window.
@@ -109,11 +222,11 @@ def main(excel_path: str | Path = DEFAULT_EXCEL_PATH) -> dict[str, Path]:
         diagnostic,
         window,
         table_rows=rows_all,
-        table_reference_dt=updated_at_dt,
+        table_reference_dt=anchor_dt,
     )
 
-    # meta.updatedAt shows the Excel file modification date. This same stamp
-    # also filters the operational table (live work only).
+    # meta.updatedAt is the run reference (ADR-012). This same stamp also
+    # filters the operational table (live work only).
     contract["meta"]["updatedAt"] = updated_at_display
 
     # Step 6: Calculate KPIs over the FULL in-scope set (KPI scope, no dedup)
@@ -146,7 +259,16 @@ def main(excel_path: str | Path = DEFAULT_EXCEL_PATH) -> dict[str, Path]:
             "windowEnd": window["end_hhmm"],
             "windowAnchor": window["updated_at"].strftime("%Y-%m-%dT%H:%M:%S"),
             "displayedUpdatedAt": updated_at_display,
-            "updatedAtSource": "excel_file_mtime",
+            # Truthful provenance of the anchor: an organic scheduled run uses
+            # the real clock; a reproduced run was pinned with --now. The Excel
+            # mtime is NOT the anchor (ADR-012) and is reported separately below.
+            "updatedAtSource": (
+                "now_override" if reference_now is not None else "run_clock"
+            ),
+            # Excel mtime — DIAGNOSTIC ONLY. Useful to spot a stale file in a
+            # scheduled run; it never reaches the window, the rules or the table.
+            "excelFileMtime": file_mtime_iso(excel_path),
+            "excelFileMtimeSource": "excel_file_mtime",
             "timelineScope": {
                 "description": "Bars whose impl start is inside the dynamic 8h window",
                 "barsInWindow": len(rows_timeline),
@@ -218,7 +340,12 @@ def main(excel_path: str | Path = DEFAULT_EXCEL_PATH) -> dict[str, Path]:
 
 
 def file_mtime_iso(path: str | Path) -> str:
-    """Excel file modification time as ISO string (v1.1.1)."""
+    """Excel file modification time as an ISO string.
+
+    DIAGNOSTIC ONLY (ADR-012): this value lands in ``diagnostic_report.json``
+    as ``excelFileMtime`` so a stale workbook can be spotted in a scheduled
+    run. It never anchors the window, the rules or the table filter.
+    """
     return datetime.fromtimestamp(
         Path(path).stat().st_mtime
     ).strftime("%Y-%m-%dT%H:%M:%S")
@@ -247,8 +374,8 @@ def _print_report(
     print("\n" + line)
     print("  AGILEOPS PROD CONSOLE — PIPELINE REPORT")
     print(line)
-    print(f"  Última actualización del Excel : {contract['meta']['updatedAt']}")
-    print(f"  Ventana dinámica (ADR-005)     : "
+    print(f"  Referencia de ejecución (reloj): {contract['meta']['updatedAt']}")
+    print(f"  Ventana dinámica (ADR-012)     : "
           f"{contract['meta']['windowStart']} → {contract['meta']['windowEnd']}")
     print(line)
     print("  PROCESAMIENTO")
@@ -315,10 +442,11 @@ def _print_report(
         print("    (filtro de presentacion, NO control de acceso - ver ADR-011)")
     print(line)
     print("  Frontend: dashboard.js (tabla operativa); theme.css y timeline intactos.")
-    print("  ADR-005 corregido (v1.1.3): referencia temporal única = mtime del Excel.")
+    print("  ADR-012: la ventana se ancla al reloj de ejecución (reemplaza ADR-005).")
+    mtime = diagnostic.get("excelFileMtime", "?")
+    print(f"  Excel mtime (solo diagnóstico) : {mtime}")
     print(line)
 
 
 if __name__ == "__main__":
-    excel_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_EXCEL_PATH
-    main(excel_file)
+    sys.exit(cli())

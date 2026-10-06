@@ -618,3 +618,126 @@ visibility", or as anything that protects data.** It narrows what is rendered.
   records equals the full in-scope dataset. That is asserted in tests, and the
   global KPI object is not always the sum of the groups: rows outside every
   group (i.e. outside the pool whitelist) contribute to the global object only.
+
+## ADR-012 The window is anchored to the RUN CLOCK
+
+**This ADR supersedes ADR-005's anchor choice.** It does **not** revise or
+delete ADR-005: that record stays as history. Read it for the *single
+temporal reference* principle, which this ADR keeps; its choice of **what**
+anchors that reference is what changes.
+
+### What was reversed
+
+ADR-005 declared, verbatim:
+
+> El "ahora" de las reglas es `meta.updatedAt`, NO el reloj del sistema. Esto
+> hace la salida determinista para un mismo Excel y respeta la decisión de que
+> el dashboard es una foto, no un seguimiento continuo.
+
+and set the anchor to the workbook's modification time:
+
+```python
+meta.updatedAt = Path(excel_path).stat().st_mtime
+```
+
+ADR-012 reverses exactly that: the anchor is now the **run clock** — the system
+time at which the pipeline executes — captured once per run.
+
+### Why
+
+The dashboard is executed by **Windows Task Scheduler** on the client machine.
+The requirement, from the product owner, is: *if the task runs at 09:55, the
+timeline must show the window starting at 09:00.*
+
+The Excel mtime cannot express that, because for the real workbook it is a
+**copy artifact**: `workspace/input/ControlPases.xlsx` reports
+`2026-10-05 21:40:36`, which is when the file was dropped onto the machine, not
+when its contents changed. Anchoring to it produced a `21:00 → 05:00` window
+while the operator was working the 09:00 shift. ADR-005's "deterministic photo"
+property was real, but it was determinism about the wrong instant.
+
+### Decision
+
+1. **One reference, sourced from the clock.** `python/main.py` computes the
+   reference exactly once:
+
+   ```python
+   anchor_dt = _resolve_reference_now(reference_now)  # datetime.now() if None
+   ```
+
+   Every consumer still flows from that **single** value: the window
+   (`compute_window(anchor_dt)`), the rules' `reference_now`, the operational
+   table's live-work filter and `meta.updatedAt`. This preserves the good half
+   of ADR-005 — one reference, never two — and changes only its source. No
+   second temporal reference is introduced.
+
+2. **A `--now` override makes a run reproducible.** Because the clock is not
+   reproducible, `main(excel_path, reference_now=None)` accepts an explicit
+   reference and the CLI exposes it:
+
+   ```powershell
+   python python\main.py --now "2026-10-06 09:55"
+   ```
+
+   The value flows through the **same** single-reference path; it is not a
+   parallel one. `--now` accepts several formats (`2026-10-06 09:55`,
+   `2026-10-06T09:55`, ...). An unparseable value is a **loud** error
+   (`argparse` exits non-zero); it never silently falls back to the clock.
+   `python python\main.py` with no arguments keeps working, because that is the
+   form the scheduler uses.
+
+3. **The Excel mtime is kept, but demoted to diagnostics.** It is still useful
+   to spot a stale workbook in a scheduled run, so it is reported in
+   `diagnostic_report.json` as `excelFileMtime` (with
+   `excelFileMtimeSource = "excel_file_mtime"`). It can no longer influence the
+   window, the rules or the table filter in any code path.
+
+4. **`updatedAtSource` tells the truth.** The diagnostic now records whether the
+   anchor came from an organic run (`"run_clock"`) or a reproduced one
+   (`"now_override"`), so a reader can distinguish them. Previously it was
+   hardcoded to `"excel_file_mtime"`.
+
+5. **The latent second reference inside `adapter.to_contract` is removed.**
+   Its signature defaulted `window=None` and fell back to
+   `compute_window(datetime.now())`. That fallback read the wall clock while the
+   main path read the Excel mtime — two references in one system, the precise
+   defect ADR-005 was written to eliminate, reintroduced one layer down. Every
+   caller already passed a window, so `to_contract` now **raises `ValueError`**
+   when `window` is missing instead of inventing one.
+
+### Cost, and its mitigation
+
+The output is **no longer deterministic for the same Excel**. Two runs of the
+same workbook at different times produce different windows, timelines, table
+rows and KPIs. That cost is accepted because the dashboard is meant to track the
+current shift, not to be a fixed photograph.
+
+The mitigation is the `--now` override: a run that must be reproduced exactly
+(support, an incident review, a test) is pinned with an explicit reference, and
+the diagnostic records `updatedAtSource = "now_override"` so the pinning is
+visible. `tests/test_run_clock.py` uses this path for every clock-anchored
+assertion.
+
+### What does NOT change
+
+- The Data Contract **shape** is untouched: only the provenance and the values
+  of `updatedAt` / `windowStart` / `windowEnd` change. `web/*` is not modified.
+- The single-reference principle of ADR-005, ADR-006's terminal-state exclusion,
+  ADR-007's freeze, ADR-008's action payload, ADR-009's pool scope, ADR-010's
+  path resolution and ADR-011's visibility groups are all intact.
+- ADR-005 remains in this file as the historical record of the mtime anchor.
+
+### How to prove it
+
+```powershell
+# Reproduced run: window must start at 09:00.
+python python\main.py --now "2026-10-06 09:55"
+#   meta.updatedAt = 2026-10-06T09:55:00, windowStart = 09:00, windowEnd = 17:00
+#   diagnostic.updatedAtSource = now_override
+
+# Organic run: window follows the real clock.
+python python\main.py
+#   windowStart = floor(current hour)
+#   diagnostic.updatedAtSource = run_clock
+#   diagnostic.excelFileMtime = the workbook's mtime (diagnostic only)
+```

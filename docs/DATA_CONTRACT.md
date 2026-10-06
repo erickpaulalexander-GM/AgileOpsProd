@@ -7,6 +7,15 @@ The contract shape is **frozen** (ADR-007). This document describes the shape
 *as implemented today* in this repository: `pool` carries the four AgileOps Prod
 pool families and `meta.poolOrder` publishes their display order (ADR-009).
 
+**Temporal reference (ADR-012).** The whole dashboard is anchored to a single
+reference: the **run clock** — the system time when the pipeline runs — or the
+explicit `--now` override. The Excel mtime is *not* a reference; it is reported
+only in `diagnostic_report.json` (see `excelFileMtime`). ADR-012 supersedes the
+Excel-mtime anchor of ADR-005.
+
+The JSON below is a **reproduced** run (`--now "2026-10-06 09:55"`), shown with
+its real clock-anchored window.
+
 ---
 
 ## Structure
@@ -17,9 +26,9 @@ Values below are the real values of the last pipeline run on
 ```json
 {
   "meta": {
-    "updatedAt": "2026-10-05T21:40:36",
-    "windowStart": "21:00",
-    "windowEnd": "05:00",
+    "updatedAt": "2026-10-06T09:55:00",
+    "windowStart": "09:00",
+    "windowEnd": "17:00",
     "poolOrder": ["Yape", "S&F", "AgileOps ORO", "AgileOps Prod"]
   },
   "kpis": {
@@ -69,11 +78,24 @@ person values are illustrative placeholders, not real rows from the run.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `updatedAt` | string (ISO 8601, no timezone) | The single temporal reference of the whole dashboard: the **Excel file modification time** (`Path(excel_path).stat().st_mtime`). Set in `python/main.py`. |
+| `updatedAt` | string (ISO 8601, no timezone) | The single temporal reference of the whole dashboard: the **run clock** — the system time when the pipeline ran — or the explicit `--now` override. Set in `python/main.py` (ADR-012). It is **not** the Excel mtime. |
 | `windowStart` | string (`HH:MM`) | Start of the 8-hour window: `floor_to_hour(updatedAt)`. |
 | `windowEnd` | string (`HH:MM`) | End of the window: `windowStart + 8h`. May cross midnight. |
 | `poolOrder` | array of string | **Display order of the four pool families.** Emitted by Python (see below). |
 | `visibilityGroups[]` | array of object | **Visibility groups the reader can switch between.** Emitted by Python (see below). ADR-011. |
+
+#### The Excel mtime — diagnostic only
+
+The Excel file's modification time is **not** part of the contract and never
+anchors `updatedAt` or the window. It survives as a separate field in
+`diagnostic_report.json` only:
+
+| Diagnostic field | Meaning |
+|------------------|---------|
+| `excelFileMtime` | The workbook's mtime (`file_mtime_iso`). Useful to spot a stale file in a scheduled run. |
+| `excelFileMtimeSource` | Always `"excel_file_mtime"`. |
+| `updatedAtSource` | The provenance of the anchor: `"run_clock"` for an organic scheduled run, `"now_override"` when the run was reproduced with `--now`. |
+| `windowAnchor` | The exact anchor datetime (`meta.updatedAt`), before flooring. |
 
 #### `meta.poolOrder` (ADR-009)
 
@@ -276,8 +298,8 @@ by planned start ascending):
    normalization — ADR-009).
 2. `ESTADO ACTUAL` is one of the active operational states `Coordinado` /
    `Pase en curso` (`adapter.TIMELINE_ALLOWED_STATES`).
-3. **Live work only**: `FEC. HORA. FIN. IMPL >= meta.updatedAt`. Finished
-   implementations drop out.
+3. **Live work only**: `FEC. HORA. FIN. IMPL >= meta.updatedAt` (the run
+   clock, ADR-012). Finished implementations drop out.
 
 `table[]` is deliberately **not** window-scoped: it is the operational universe,
 not the 8-hour slice.
@@ -293,8 +315,8 @@ not the 8-hour slice.
    day-aware. `table[]` ships pre-formatted `DD/MM HH:MM` strings and has no
    minute arithmetic.
 2. **8-hour window**. 480 minutes total: `windowEnd - windowStart` is always
-   8h, and the window crosses midnight when the anchor hour makes it (e.g.
-   `21:00 → 05:00`).
+   8h, and the window crosses midnight when the run clock makes it (e.g. a run
+   at `21:40` yields `21:00 → 05:00`).
 3. **Grid cells are 30 minutes wide** — 16 cells across the window. Each cell is
    **96 px** (`--timeline-grid-30min` in `web/theme.css`, mirrored by
    `CELL_PX = 96` in `timeline.js`). Positioning is
@@ -370,21 +392,30 @@ all derive from **one ordered table** in `python/column_map.py`
 
 ## Verified run
 
-Last real pipeline run, from the repository, on `workspace/input/ControlPases.xlsx`
-(sheet `Hoja1`, **1432 data rows x 34 columns**; `RECURSO` at column index 25,
-`ESTADO ACTUAL` at index 33):
+Historical pipeline run **before ADR-012**, from the repository, on
+`workspace/input/ControlPases.xlsx` (sheet `Hoja1`, **1432 data rows x 34
+columns**; `RECURSO` at column index 25, `ESTADO ACTUAL` at index 33). This run
+was anchored to the Excel mtime (`2026-10-05 21:40:36`), producing the
+`21:00 → 05:00` window below.
 
-| Fact | Value |
-|------|-------|
-| Rows read | 1432 |
-| Rows in scope | 571 (861 ignored) |
-| `meta.poolOrder` | `["Yape","S&F","AgileOps ORO","AgileOps Prod"]` |
-| Window | `21:00 → 05:00` (480 min) |
-| Timeline groups / bars | 4 groups — Yape 2, S&F 18, AgileOps ORO 9, AgileOps Prod 53 (82 bars) |
-| Table rows | 175 |
-| KPIs | `lateStarts` 3, `ratificationsSoon` 0, `ratificationsExpired` 24, `reversions` 0 |
-| Visibility groups | 3 — `yape` (default), `sf`, `agileops`; see the per-group table below |
-| Out-of-scope values present | none — `INFRAESTRUCTURA` and `AUTOMATIZADO` never appear |
+> **ADR-012 changes the window rows below.** The window and everything
+> window-dependent — the timeline bars, the per-pool split, the live-work table
+> count and the late-start/ratification KPIs — now follow the **run clock**, so
+> they differ on every run. Only the reference-independent rows (rows read, rows
+> in scope, the `RECURSO` breakdown, `meta.poolOrder`, the visibility groups)
+> stay fixed. A run is reproduced exactly with `--now`.
+
+| Fact | Value | Reference-dependent? |
+|------|-------|----------------------|
+| Rows read | 1432 | no |
+| Rows in scope | 571 (861 ignored) | no |
+| `meta.poolOrder` | `["Yape","S&F","AgileOps ORO","AgileOps Prod"]` | no |
+| Window | `21:00 → 05:00` (480 min) in that historical run | **yes** |
+| Timeline groups / bars | 4 groups — Yape 2, S&F 18, AgileOps ORO 9, AgileOps Prod 53 (82 bars) | **yes** |
+| Table rows | 175 | **yes** |
+| KPIs | `lateStarts` 3, `ratificationsSoon` 0, `ratificationsExpired` 24, `reversions` 0 | **yes** |
+| Visibility groups | 3 — `yape` (default), `sf`, `agileops`; see the per-group table below | no |
+| Out-of-scope values present | none — `INFRAESTRUCTURA` and `AUTOMATIZADO` never appear | no |
 
 The 571 in-scope rows are exactly the sum of the per-value `RECURSO` counts:
 
@@ -405,8 +436,10 @@ requires it, but this workbook snapshot contains **zero** rows with that value.
 
 ### Per visibility group (ADR-011)
 
-Measured from the same run, by rendering the generated `dashboard.html` once per
-group:
+Measured from the same historical (mtime-anchored) run, by rendering the
+generated `dashboard.html` once per group. Every column here is
+window/reference-dependent, so the values move with the run clock under
+ADR-012; the partition invariant they demonstrate does not:
 
 | `id` | Timeline families | Table rows | `tickets.passesInWindow` | `kpis.lateStarts` | `ratificationsSoon` | `ratificationsExpired` |
 |------|-------------------|-----------|---------------------------|----------------------|---------------------|--------------------------|
@@ -427,6 +460,7 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
-| v1 | 2026-09-10 | Initial contract with ADR-004 (minutes) |
+| v1.3 | 2026-10-06 | **Run-clock anchor** (ADR-012, supersedes ADR-005's anchor). `meta.updatedAt` is now the system clock at run time (or the `--now` override), not the Excel mtime. The Excel mtime is kept in `diagnostic_report.json` only (`excelFileMtime`). No shape change — only the provenance and values of `updatedAt` / `windowStart` / `windowEnd`. |
 | v1.2 | 2026-10-05 | **Pool visibility groups** (ADR-011). `meta.visibilityGroups[]` added, each entry carrying `kpis` and `tickets` (ticket-ID sets per action scope) so the web layer can scope the timeline, table, KPI cards and action drawers without hardcoding anything. `meta.kpis` and `window.ChangeOpsActions` stay global. Presentation filter only — all groups remain embedded in the same file. |
 | v1.1 | 2026-10-05 | **AgileOps Prod scope.** `pool` enum replaced with the four AgileOps Prod families; `meta.poolOrder` added (ADR-009); cell width corrected from 80 px to the real 96 px; `type` axis separated from pool identity; conflict rule restated precisely. |
+| v1 | 2026-09-10 | Initial contract with ADR-004 (minutes) |
