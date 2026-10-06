@@ -198,6 +198,38 @@ apply until a second pushable unit exists.
 - [x] T5 tests ported + 17 new pool-scope tests — committed in `170a276`
 - [x] T4 web layer renders 4 pools from data — committed in `874fc24`
 - [x] T6 docs, contract, README
+- [x] T7 pool visibility selector (Yape / S&F / AgileOps) — committed in `1c2ff79`
+
+### T7 — visibility groups
+
+Requested by the product owner after T1-T6: Yape and S&F resources must not see passes
+belonging to another pool. Implemented as a selector over 3 groups:
+
+| Group | Pool families | RECURSO values |
+| --- | --- | --- |
+| `YAPE` | Yape | `POOL - YAPE`, `POOL - YAPE-DERIVADO` |
+| `S&F` | S&F | `Pool S&F`, `POOL S&F-DERIVADO` |
+| `AgileOps` | AgileOps ORO, AgileOps Prod | the 4 AgileOps values |
+
+T7 verification (independently re-checked by the parent, not just reported):
+
+| Check | Result |
+| --- | --- |
+| 8 resources across the 3 groups, all unique | 8 / 8 |
+| The 8-value set is exactly the whitelist | True |
+| 4 families partitioned, none orphaned or doubled | 4 / 4 |
+| Group table rows sum to the full table | 175 == 175 |
+| Group `lateStarts` sum to the global KPI | 3 == 3 |
+| Group `ratificationsExpired` sum to the global KPI | 24 == 24 |
+| No ticket crosses two groups | verified — the 2 apparent dupes are duplicate ROWS within `agileops`, same ticket + same pool, different `responsable` (pre-existing "one row per record, no dedup") |
+| `pytest -q` | 120 passed, 0 failed |
+| ADR-011 limitation note present in the generated UI | Yes |
+
+**The limitation, stated plainly:** this is a presentation filter and NOT access control. All
+three groups are embedded as JSON in the same `dashboard.html`, so any reader can see every
+group via devtools. There is no server, no users and no sessions. The product owner was told
+this before choosing it. If the restriction must ever be enforced, the fix is one artifact per
+pool, or a backend that authorises the caller. Recorded as ADR-011.
 
 ### Verification evidence
 
