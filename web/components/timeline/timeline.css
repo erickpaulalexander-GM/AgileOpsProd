@@ -5,12 +5,15 @@
   Layers:
     1. __header       — hour labels (23:00, 00:00, 01:00 …)
     2. __grid         — 30-min column lines
-    3. __bars         — operation bars (Legacy / Yape)
+    3. __bars         — operation bars (one row group per pool family)
     4. __indicators   — conflict triangles
     5. __selection    — KPI-driven highlight overlay
 
   Owner: TIMELINE_SPEC.md
-  Pool colours: Legacy #F6E7A7, Yape #E6D7FF
+  Pool families: 4 — Yape, S&F, AgileOps ORO, AgileOps Prod. The order and the
+  name list are NOT declared here: they come from meta.poolOrder in the data
+  contract (ADR-009), and the CSS keys below are the slug tokens produced by
+  Timeline.poolKey(). Adding a pool family only requires the Python-side list.
 
   Phase 2 changes:
     - Removed "now" line (static snapshot, not live tracking)
@@ -19,7 +22,7 @@
     - Overlap stacking handled by JS (timeline.js)
 
   Phase 2.6 (Dashboard improvements):
-    - Pool group headers (Legacy / Yape)
+    - Pool group headers (one per pool family, data-driven)
     - Row height increased to 44px for better readability
 */
 
@@ -140,12 +143,15 @@
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--text-secondary);
+  /* Fallback so a pool the JS could not tokenize still gets a visible accent
+     instead of an unstyled one. Overridden per pool below. */
+  --pool-accent: var(--border-strong);
   z-index: 8;
 }
 
 /* Pool label shares the responsable column and stays pinned (like the
    responsable labels) while the timeline scrolls horizontally, so a row never
-   loses its Legacy/Yape context. */
+   loses its pool context. */
 .timeline__pool-label {
   position: sticky;
   left: 0;
@@ -161,14 +167,25 @@
   white-space: nowrap;
 }
 
-.timeline__pool-header--legacy { --pool-accent: #B45309; }
-.timeline__pool-header--yape   { --pool-accent: #7C3AED; }
+/* Pool accents — one per pool family, in meta.poolOrder order. This is where a
+   pool's token is BOUND to its accent; the values themselves are theme-aware
+   tokens declared in theme.css, because a dark accent is invisible on the dark
+   surface and the same accent must also read on the light surface.
+
+   These rules MUST stay AFTER the base `.timeline__pool-header` fallback: both
+   selectors have the same specificity, so source order is what makes a per-pool
+   accent win over the fallback. */
+.timeline__pool-header--yape          { --pool-accent: var(--pool-accent-yape); }
+.timeline__pool-header--sf            { --pool-accent: var(--pool-accent-sf); }
+.timeline__pool-header--agileops-oro  { --pool-accent: var(--pool-accent-agileops-oro); }
+.timeline__pool-header--agileops-prod { --pool-accent: var(--pool-accent-agileops-prod); }
 
 .timeline__pool-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  background: var(--pool-accent);
 }
 
 .timeline__pool-name {
@@ -255,13 +272,29 @@
   box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--text-primary);
 }
 
-/* Pool fills */
-.timeline__bar--legacy {
-  background: var(--color-legacy);
-}
-
+/* Pool fills — background is the light --color-* token, so the bar label text
+   (rgba(0,0,0,.7)) always keeps its contrast in both themes.
+   Status modifiers below override the fill; they are declared after these
+   rules on purpose so status keeps winning. */
 .timeline__bar--yape {
   background: var(--color-yape);
+}
+
+.timeline__bar--sf {
+  background: var(--color-sf);
+}
+
+.timeline__bar--agileops-oro {
+  background: var(--color-agileops-oro);
+}
+
+.timeline__bar--agileops-prod {
+  background: var(--color-agileops-prod);
+}
+
+/* Fallback for a pool the JS could not tokenize. */
+.timeline__bar--unknown {
+  background: var(--bg-hover);
 }
 
 /* Status modifiers */

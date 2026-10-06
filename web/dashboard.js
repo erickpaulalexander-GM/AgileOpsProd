@@ -393,7 +393,7 @@
       + '</tr>';
 
     tbody.innerHTML = rows.map(function (r) {
-      var poolClass = r.pool === 'Legacy' ? 'badge--legacy' : 'badge--yape';
+      var poolClass = 'badge--' + _poolKey(r.pool);
       var statusClass = r.status === 'Coordinado' ? 'badge--coordinado'
         : r.status === 'Pase en curso' ? 'badge--pase-en-curso'
         : r.status === 'Inicio atrasado' ? 'badge--inicio-atrasado'
@@ -442,7 +442,7 @@
     // Enrich from the operational table (pool / NOMBRE APP / Estado Actual).
     var idx = _lookupTicket(barData.ticket) || {};
     var appName = barData.name || idx.name || '';
-    var pool = barData.pool || idx.pool || '';          // real pool (Legacy/Yape)
+    var pool = barData.pool || idx.pool || '';          // pool family (meta.poolOrder)
     var estadoActual = idx.status || barData.status || '';
     var recurso = barData.responsable || '';            // RECURSO ASIGNADO (v1.1.5)
 
@@ -533,8 +533,26 @@
     return dd + '/' + mm + ' ' + hh + ':' + mi;
   }
 
+  /**
+   * Pool name → CSS-safe token (badge class suffix).
+   *
+   * DELEGATED to window.Timeline.poolKey — the single source of the mapping
+   * (ADR-009). This file must never re-derive the slug: `toLowerCase()` alone
+   * yields "s&f" and "agileops oro", both invalid in a CSS class selector, so
+   * a local copy would silently produce unstyled badges.
+   *
+   * window.Timeline is inlined before this script by renderer.py, but the
+   * fallback keeps the render working if the load order ever changes.
+   */
   function _poolKey(pool) {
-    return pool.toLowerCase();
+    if (window.Timeline && typeof window.Timeline.poolKey === 'function') {
+      return window.Timeline.poolKey(pool);
+    }
+    // Last-resort slug; never a hardcoded pool list.
+    return String(pool == null ? '' : pool)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'unknown';
   }
 
   function _pad(n) {

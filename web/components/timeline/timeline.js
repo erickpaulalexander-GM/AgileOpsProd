@@ -14,9 +14,12 @@
  *
  * Architecture: 5 layers (header, grid, bars, indicators, selection).
  *
- * Data source: Data Contract v1 (meta, kpis, timeline, table) where `pool`
- * stays Legacy/Yape. The responsable grouping is derived at render time from
- * `window.ChangeOpsActions.passesInWindow[].resource` — the Contract is frozen.
+ * Data source: Data Contract v1 (meta, kpis, timeline, table). The pool rows
+ * and their display order come from `meta.poolOrder`, which Python emits from
+ * the single source of truth (column_map.POOL_FAMILY_ORDER) — this layer never
+ * hardcodes the pool list. The responsable grouping is derived at render time
+ * from `window.ChangeOpsActions.passesInWindow[].resource` — the Contract is
+ * frozen.
  */
 
 window.Timeline = (function () {
@@ -30,6 +33,17 @@ window.Timeline = (function () {
   var DEFAULT_LABEL_W = 220;
 
   /* =========================================================
+     POOL SCOPE — data-driven, never hardcoded (ADR-009)
+     ---------------------------------------------------------
+     meta.poolOrder is the single source of truth for the display
+     order, published by Python (column_map.POOL_FAMILY_ORDER). This
+     layer resolves it ONCE in init() and both render loops read the
+     same resolved list, so the two loops can never disagree.
+     ========================================================= */
+  var UNKNOWN_POOL = 'Unknown';       // pool label when a bar carries none
+  var UNKNOWN_POOL_KEY = 'unknown';   // CSS token for UNKNOWN_POOL
+
+  /* =========================================================
      STATE
      ========================================================= */
   var _container = null;      // #timeline element
@@ -39,6 +53,7 @@ window.Timeline = (function () {
   var _onBarClick = null;     // callback(barData)
   var _responsableMap = {};   // ticket → RECURSO ASIGNADO (render-only)
   var _rowMetrics = {};       // responsable → { top, height } within the rows area
+  var _poolOrder = [];        // display order, resolved once from meta.poolOrder
 
   /* =========================================================
      INIT — receives Data Contract v1
@@ -49,8 +64,49 @@ window.Timeline = (function () {
     _onBarClick = onBarClick || null;
 
     _responsableMap = _buildResponsableMap();
+    _poolOrder = _resolvePoolOrder(_contract);
     _buildAllBars();
     render();
+  }
+
+  /* =========================================================
+     POOL ORDER — resolved once from meta.poolOrder (ADR-009)
+     ---------------------------------------------------------
+     Never falls back to a hardcoded pool list: when meta.poolOrder
+     is missing, empty or malformed we fall back to the pools that
+     actually carry bars (alphabetical, so the order stays stable).
+     A pool declared with zero bars simply renders no rows.
+     ========================================================= */
+  function _resolvePoolOrder(contract) {
+    var declared = contract && contract.meta ? contract.meta.poolOrder : null;
+    if (!Array.isArray(declared)) return [];
+
+    var seen = {};
+    var order = [];
+    declared.forEach(function (pool) {
+      if (typeof pool !== 'string') return;
+      var name = pool.trim();
+      if (!name || seen[name]) return;
+      seen[name] = true;
+      order.push(name);
+    });
+    return order;
+  }
+
+  /**
+   * The ONE pool display order every render loop iterates.
+   *
+   * meta.poolOrder leads; any pool that carries bars but is missing from it is
+   * appended in alphabetical order, so an unmapped pool can never be silently
+   * dropped and a missing meta.poolOrder degrades to "every pool that has
+   * bars" instead of rendering nothing. Still no hardcoded pool list.
+   */
+  function _orderedPoolNames(poolGroups) {
+    var order = _poolOrder.slice();
+    Object.keys(poolGroups || {}).sort().forEach(function (pool) {
+      if (order.indexOf(pool) === -1) order.push(pool);
+    });
+    return order;
   }
 
   /* =========================================================
@@ -89,7 +145,7 @@ window.Timeline = (function () {
           status: bar.status,
           start: bar.start,         // minutes from window start (ADR-004)
           duration: bar.duration,   // minutes (ADR-004)
-          pool: group.pool,         // real pool (Legacy/Yape)
+          pool: group.pool,         // pool family, from meta.poolOrder
           responsable: _responsableFor(bar.ticket),
         });
       });
@@ -163,10 +219,7 @@ window.Timeline = (function () {
     var html = '';
     var cumulativeTop = headerOffset; // bars layer padding-top (hour header offset)
 
-    // Define pool order: Legacy first, then Yape
-    var poolOrder = ['Legacy', 'Yape'];
-
-    poolOrder.forEach(function (poolName) {
+    _orderedPoolNames(poolGroups).forEach(function (poolName) {
       var poolData = poolGroups[poolName];
       if (!poolData || poolData.responsables.length === 0) return;
 
@@ -263,12 +316,16 @@ window.Timeline = (function () {
 
   /**
    * Group bars by pool, then by responsable.
-   * Returns: { Legacy: { responsables: [], barCount: N }, Yape: { ... } }
+   * Returns: { "Yape": { responsables: [], barCount: N }, ... }
+   * Keys are the pool names published in meta.poolOrder, in any order;
+   * _poolOrder drives the iteration.
    */
   function _groupByPool(allBars) {
     var byPool = {};
     allBars.forEach(function (bar) {
-      var pool = bar.pool || 'Legacy';
+      // A bar without a pool is grouped under UNKNOWN_POOL rather than being
+      // forced into a real pool — a silent wrong default would mislabel it.
+      var pool = bar.pool || UNKNOWN_POOL;
       if (!byPool[pool]) byPool[pool] = { bars: [] };
       byPool[pool].bars.push(bar);
     });
@@ -306,12 +363,14 @@ window.Timeline = (function () {
   function _renderPoolHeader(poolName, poolData) {
     var resourceCount = poolData.responsables.length;
     var passCount = poolData.barCount;
-    var accentColor = poolName === 'Legacy' ? '#B45309' : '#7C3AED';
-    var poolKey = poolName.toLowerCase();
+    var poolKey = _poolKey(poolName);
 
     return '<div class="timeline__pool-header timeline__pool-header--' + poolKey + '">'
       + '<div class="timeline__pool-label">'
-      + '<span class="timeline__pool-dot" style="background:' + accentColor + ';"></span>'
+      // The dot colour comes from --pool-accent, set by the
+      // .timeline__pool-header--<token> rule in timeline.css. The token IS the
+      // single source shared with the bar fill, the badge and dashboard.js.
+      + '<span class="timeline__pool-dot"></span>'
       + '<span class="timeline__pool-name">' + poolName + '</span>'
       + '<span class="timeline__pool-counts">' + resourceCount + ' recurso' + (resourceCount !== 1 ? 's' : '') + ' · ' + passCount + ' pase' + (passCount !== 1 ? 's' : '') + '</span>'
       + '</div>'
@@ -330,9 +389,8 @@ window.Timeline = (function () {
     var poolGroups = _groupByPool(_allBars);
     var html = '';
 
-    var poolOrder = ['Legacy', 'Yape'];
-
-    poolOrder.forEach(function (poolName) {
+    // Same resolved order as _renderBars — one list, two consumers.
+    _orderedPoolNames(poolGroups).forEach(function (poolName) {
       var poolData = poolGroups[poolName];
       if (!poolData || poolData.responsables.length === 0) return;
 
@@ -447,8 +505,43 @@ window.Timeline = (function () {
     return _allBars.find(function (b) { return b.ticket === ticket; }) || null;
   }
 
+  /**
+   * Pool name → CSS-safe token. SINGLE SOURCE of the mapping (ADR-009).
+   *
+   * `String.prototype.toLowerCase()` alone is NOT enough: the real pool names
+   * contain characters that are invalid in a class selector —
+   * "S&F" carries '&', "AgileOps ORO" / "AgileOps Prod" carry a space.
+   *
+   * Rules, applied in order:
+   *   1. non-string / empty → 'unknown' (never '' — an empty token would
+   *      produce the bare `.timeline__bar--` class)
+   *   2. decompose + drop combining marks, so accents never leak in
+   *   3. lower-case
+   *   4. spaces and underscores → '-'; collapse runs
+   *   5. drop every remaining non [a-z0-9-] character ('&', '.', '/', …)
+   *   6. trim leading/trailing '-'
+   *
+   *   "Yape"        → "yape"
+   *   "S&F"         → "sf"
+   *   "AgileOps ORO"  → "agileops-oro"
+   *   "AgileOps Prod" → "agileops-prod"
+   *
+   * dashboard.js reaches this through window.Timeline.poolKey, so the badge
+   * class can never drift from the timeline token.
+   */
   function _poolKey(pool) {
-    return String(pool || '').toLowerCase();
+    if (typeof pool !== 'string') return UNKNOWN_POOL_KEY;
+
+    var token = pool
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[\s_]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .replace(/^-+|-+$/g, '');
+
+    return token || UNKNOWN_POOL_KEY;
   }
 
   function _pad(n) {
@@ -490,5 +583,8 @@ window.Timeline = (function () {
     clearFilter: clearFilter,
     getActiveFilter: getActiveFilter,
     scrollToHour: scrollToHour,
+    // Public so dashboard.js shares ONE pool→token rule (ADR-009) instead of
+    // re-deriving a class name with different logic.
+    poolKey: _poolKey,
   };
 })();
