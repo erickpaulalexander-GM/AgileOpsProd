@@ -24,8 +24,10 @@ them into the Legacy/Yape console would corrupt its KPIs and its timeline.
 
 ### Verified input facts
 
-`workspace/input/ControlPases.xlsx`, sheet `Hoja1`, 1433 data rows x 44 columns. Same schema
-as the ChangeOps workbook: `RECURSO` (index 25), `ESTADO ACTUAL` (index 33).
+`workspace/input/ControlPases.xlsx`, sheet `Hoja1`, **1432 data rows x 34 columns** (corrected
+after verification — an earlier draft of this document said "1433 x 44"; the 1433 was
+header-inclusive and the 44 column count was simply wrong). Same schema as the ChangeOps
+workbook: `RECURSO` (index 25), `ESTADO ACTUAL` (index 33). 571 rows are in scope, 861 ignored.
 
 Observed distinct `RECURSO` values in the requested scope:
 
@@ -71,8 +73,14 @@ theme, and the whole `excel_reader`/`column_map` date parsing.
 - Input: `workspace/input/ControlPases.xlsx`. Output: `workspace/output/`.
 - No `.bat` launchers (the corporate machine blocks them, per `workspace/input/dev-report.txt`).
 - Pool matching must be whitespace-insensitive (`POOL S&F-DERIVADO` has no space before
-  DERIVADO; `Pool AgileOps ORO - Derivado` has several) but must NOT match by loose substring,
-  because `AUTOMATIZADO` and `AUTOMATIZADO ITSM` must stay excluded.
+  DERIVADO; `Pool AgileOps ORO - Derivado` has several) and must be an exact match on the
+  normalized value. **Corrected premise:** this document originally justified exact matching
+  by claiming a loose substring matcher would pull in `AUTOMATIZADO` / `AUTOMATIZADO ITSM`.
+  That was measured and it is FALSE on this snapshot — a naive `AGILEOPS|YAPE|S&F` substring
+  union returns exactly the correct 571 rows with zero collisions. The real justification for
+  exact matching is that `AGILEOPS` alone matches 457 rows spanning 4 distinct values and
+  cannot separate `AgileOps ORO` from `AgileOps Prod`; only the specific tokens do. Exact
+  matching is kept because it is auditable against an explicit 8-value list.
 - Single source of truth for the pool list. ChangeOpsConsole duplicates it in
   `column_map.py` and `timeline.js`, which is how a pool silently fails to render.
 - `AGILEOPSORO` must be resolved before any looser `AGILEOPS` token, so family resolution is
@@ -134,15 +142,19 @@ theme, and the whole `excel_reader`/`column_map` date parsing.
 
 ## Acceptance criteria
 
-1. `python -m pytest` passes with zero failures.
-2. `ruff check .` is clean.
+1. `python -m pytest` passes with zero failures. **MET** — 84 passed (ChangeOps baseline 57).
+2. `ruff check .` is clean. **MET** — All checks passed.
 3. Running the pipeline on `workspace/input/ControlPases.xlsx` writes
    `workspace/output/dashboard.html`, `dashboard_data.json` and `diagnostic_report.json`.
+   **MET** — verified, including a run from `C:\Windows` with no arguments, exit code 0.
 4. `dashboard_data.json` reports only the 4 AgileOps families and the 8-value scope;
-   `INFRAESTRUCTURA` / `AUTOMATIZADO` never appear.
+   `INFRAESTRUCTURA` / `AUTOMATIZADO` never appear. **MET** — leak scan returns none.
 5. The generated HTML renders 4 pool rows with no `undefined`/`Unknown` pool leakage when a
-   pool has no bars in the window.
-6. No file in `D:\IA_DEV\ChangeOpsConsole` is modified.
+   pool has no bars in the window. **MET** — all 4 tokens rendered
+   (`yape`, `sf`, `agileops-oro`, `agileops-prod`) in a `node:vm` harness executing the real
+   `timeline.js` against the real `dashboard_data.json`.
+6. No file in `D:\IA_DEV\ChangeOpsConsole` is modified. **MET** — verified by mtime and by
+   `timeline.js:167` there still reading `['Legacy', 'Yape']`.
 
 ## Applicable checks
 
@@ -172,8 +184,44 @@ apply until a second pushable unit exists.
 
 ## Progress
 
-- Feature document created. No source written yet.
+- [x] T1 scaffold — committed in `170a276`
+- [x] T2 copy + paths — committed in `170a276`
+- [x] T3 pool scope single source of truth — committed in `170a276`
+- [x] T5 tests ported + 17 new pool-scope tests — committed in `170a276`
+- [x] T4 web layer renders 4 pools from data — committed in `874fc24`
+- [x] T6 docs, contract, README
 
-## Next step
+### Verification evidence
 
-T1 — scaffold the repository and project config.
+| Check | Result |
+| --- | --- |
+| `pytest -q` | 84 passed, 0 failed (11 modules) |
+| `ruff check .` | All checks passed |
+| `node --check timeline.js` / `dashboard.js` | exit 0 / exit 0 |
+| Pipeline run, in-repo | exit 0, 3 artifacts written |
+| Pipeline run from `C:\Windows`, no args | exit 0, same byte sizes — ADR-010 holds |
+| `meta.poolOrder` readback | `["Yape","S&F","AgileOps ORO","AgileOps Prod"]` |
+| Timeline groups | Yape 2, S&F 18, ORO 9, Prod 53 (82 bars) |
+| Table rows | 175, pool set exactly the 4 families |
+| Bar types | implementacion 50, derivado 32 |
+| Leak scan | 0 hits for INFRAESTRUCTURA, AUTOMATIZADO, EXPRESS AUTOMATICO, Legacy, Unknown, undefined |
+| Native review | not run — receipt-driven development is `off` (global) |
+
+Authored changed lines across both work units: ~1200 (the whole app is new). This repository
+is its own product, so the `ask-on-risk` chain question does not apply until a second pushable
+unit exists.
+
+### Inherited defects found, deliberately NOT fixed (out of scope)
+
+1. **`python/table.py` and `python/timeline.py` are dead placeholders** — each is a single
+   line `"""Pendiente implementar."""` and nothing imports them. Carried over verbatim from
+   ChangeOpsConsole. Documented in the README as ignorable.
+2. **Conflict-count divergence between the two layers.** `web/components/timeline/timeline.js`
+   `_renderConflicts` scopes conflicts to a `(pool, responsable)` group, while
+   `python/rules.py:183-200` groups by `responsable` only, with no pool condition. A person
+   holding overlapping implementations across two pools is therefore counted by the
+   diagnostic `conflictsDetected` but not drawn by the UI. Both read 0 on the current run, so
+   it is unobservable today. This is pre-existing in ChangeOpsConsole, not candidate-caused.
+3. **Inherited contract constants were wrong.** ChangeOpsConsole's `DATA_CONTRACT.md` claimed
+   a 30-minute cell is 80px; the actual value is 96px (`theme.css:11`,
+   `timeline.js:32`). Already false in the source repo. Corrected in our contract.

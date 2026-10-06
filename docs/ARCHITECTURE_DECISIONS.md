@@ -254,5 +254,229 @@ para el cálculo; ADR-008 lo re-habilita únicamente para mostrarlo).
 - ADR-005, ADR-006 y ADR-007 intactos.
 - Sin reglas de negocio nuevas: el payload deriva de flags ya calculados.
 
+## ADR-009 The pool scope is data, not code
+
+The operational pool scope is declared **once, as an ordered table in Python**,
+and published to the frontend through the Data Contract. No pool list is ever
+written twice.
+
+### Problem
+
+`ChangeOpsConsole` hardcoded its pool scope in **three** places across **two**
+languages:
+
+| Location | Literal |
+|----------|---------|
+| `python/column_map.py:81` | `R1_POOL_KEYWORDS = ["LEGACY", "YAPE"]` |
+| `web/components/timeline/timeline.js:167` | `var poolOrder = ['Legacy', 'Yape'];` |
+| `web/components/timeline/timeline.js:333` | `var poolOrder = ['Legacy', 'Yape'];` (a **second copy in the same file**) |
+| `web/dashboard.js:396` | `r.pool === 'Legacy' ? 'badge--legacy' : 'badge--yape'` (binary ternary) |
+| `web/components/timeline/timeline.js:309` | `poolName === 'Legacy' ? '#B45309' : '#7C3AED'` (binary ternary) |
+
+Those copies were free to drift, and when they did, the failure was
+**silent**. A pool present in Python but absent from the JavaScript array was
+still written into `dashboard_data.json` — the contract was valid, the JSON
+looked correct, the pool name appeared in the data — and the Timeline simply
+never drew a row for it. No error, no warning, no empty state: the pool just did
+not exist on screen. Adding a third family meant editing several of those
+locations, and forgetting one produced a dashboard that quietly lied. The two
+literals inside `timeline.js` are the sharpest illustration: `_renderBars` and
+`_renderConflicts` each declared their own `poolOrder`, so the bar layer and the
+conflict layer could disagree about the order in the same render pass.
+
+There is a second, sharper reason this must be data and not code. The four
+display pools are **not** the eight `RECURSO` values in the workbook. The eight
+collapse into four families, and `-DERIVADO` is the **bar type**, not a pool.
+Any list that lives in JavaScript is a list of *display families*; any list that
+lives in Python is a list of *workbook resource values*. Two representations of
+one concept, in two languages, with a mapping between them that nobody could see
+in either place.
+
+### Decision
+
+1. **One ordered family table is the only place to edit.**
+   `python/column_map.py::_POOL_FAMILY_RESOURCES` is a tuple of
+   `(display family, (RECURSO values...))` pairs, in display order. Everything
+   else is derived from it:
+
+   | Derived symbol | Meaning |
+   |---|---|
+   | `POOL_FAMILY_ORDER` | Display order of the families |
+   | `IN_SCOPE_RECURSO` | The 8 in-scope `RECURSO` values, flattened |
+   | `IN_SCOPE_POOL_KEYS` | Normalized exact-match inclusion whitelist |
+   | `_RESOURCE_TO_FAMILY` | Inverse index, normalized value → display family |
+
+   `python/adapter.py` **imports** these; it never re-declares a literal pool
+   value. `tests/test_pool_scope.py::test_adapter_source_does_not_duplicate_the_pool_list`
+   reads `adapter.py` as text and fails if any of the 8 literals reappears there,
+   so the duplication cannot come back silently.
+
+2. **Python publishes `meta.poolOrder`.**
+   `adapter.to_contract()` writes `meta.poolOrder = list(POOL_FAMILY_ORDER)`
+   into the Data Contract. It is emitted unconditionally — the full list of 4
+   families even when `timeline` is empty or a family has zero bars in the
+   window. "Declared in scope" and "has bars in this window" are two independent
+   facts, and collapsing them is what made the original bug invisible.
+
+3. **The web layer reads it and hardcodes nothing.**
+   `timeline.js::_resolvePoolOrder` resolves `meta.poolOrder` **once** in
+   `init()`, and both render loops (`_renderBars`, `_renderConflicts`) iterate
+   that single resolved list — so the bar layer and the conflict layer can never
+   disagree about the order. A pool that carries bars but is missing from
+   `poolOrder` is appended in alphabetical order rather than dropped; a missing or
+   malformed `poolOrder` degrades to "every pool that has bars, alphabetical".
+   There is no fallback array of pool names anywhere in `web/`.
+
+4. **Family → CSS token is computed, not tabulated.**
+   `Timeline.poolKey(pool)` is the single source of the name → slug mapping and
+   is exposed on the public API so `dashboard.js` delegates to it instead of
+   re-deriving the class name. `toLowerCase()` alone is not enough: `S&F`
+   contains `&` and `AgileOps ORO` contains a space, both invalid in a class
+   selector. Because the slug is computed, adding a family needs no JavaScript
+   change at all.
+
+5. **Inclusion matching is exact on a normalized value, never a substring.**
+
+   `normalize_recurso()` upper-cases and removes **all whitespace** — and
+   nothing else. Hyphens are preserved, so `Pool AgileOps Prod` can never
+   collapse onto a hypothetical `POOL-AGILEOPS-PROD`.
+
+   The reason is not style. A substring test answers the question "does this value
+   **mention** one of my tokens", which is a different predicate from "**is** one
+   of my pools". `ChangeOpsConsole` implemented the former:
+   `column_map.py:100` was `return any(kw in upper for kw in R1_POOL_KEYWORDS)`
+   against `R1_POOL_KEYWORDS = ["LEGACY", "YAPE"]`.
+
+   On *this* workbook that predicate happens to accept only `POOL - YAPE`
+   (8 rows), and a naive substring union of `AGILEOPS | YAPE | S&F` also lands
+   on exactly the right 571 rows — **the current snapshot does not collide.**
+   The rule is still exact-match-only, because that safety is a property of
+   today's data, not of the predicate. Three concrete reasons:
+
+   * **It is one edit away from a real defect.** The workbook contains
+     `AUTOMATIZADO` (248) and `AUTOMATIZADO ITSM` (167) — a pair that differs by
+     exactly one token. Any scope token those values happen to contain, or any
+     future scope added by loose token, silently changes the operational universe
+     and therefore every KPI. An enumerated exact whitelist makes that
+     impossible: adding a pool adds one literal, and it cannot capture a
+     neighbour.
+   * **A token is not a family.** `AGILEOPS` matches **457** rows spanning four
+     `RECURSO` values, and it cannot tell `AgileOps ORO` from `AgileOps Prod`.
+     The tokens that discriminate are `AGILEOPSORO` and `AGILEOPSPROD`, which is
+     precisely why `_FAMILY_TOKENS` is ordered and why
+     `test_family_resolution_never_relies_on_agileops_alone` exists.
+   * **Exact matching keeps the scope auditable.** The workbook has **17**
+     distinct `RECURSO` values; the whitelist names 8 of them verbatim and
+     excludes the other 9. "Why is this row in scope?" is answered by looking up
+     one literal in one 8-entry table. With a substring matcher the same question
+     has no local answer — it depends on the whole vocabulary of values that might
+     appear, now or after the next workbook drop.
+
+   `tests/test_pool_scope.py::test_substring_lookalikes_are_rejected` pins the
+   behaviour explicitly, so the rule cannot be quietly relaxed later.
+
+   Normalization is whitespace-and-case only because the real data demands
+   exactly that much: `POOL S&F-DERIVADO` has no space before the hyphen while
+   `Pool AgileOps ORO - Derivado` has several, and both must resolve to the same
+   key. Nothing more.
+
+6. **Family resolution is ordered, and `-DERIVADO` never becomes a pool.**
+   `get_pool_name()` resolves the exact key first; only on a miss does it fall
+   back to ordered family tokens `YAPE`, `S&F`, `AGILEOPSORO`, `AGILEOPSPROD`.
+   `AGILEOPSORO` and `AGILEOPSPROD` are strictly longer than `AGILEOPS`, and
+   they are evaluated in that order, so resolution never collapses onto
+   `AGILEOPS` alone and cannot steal one family from another. The `-DERIVADO`
+   distinction is read by `adapter.get_bar_type()` on the `type` axis and by
+   `rules._is_implementation()` for conflicts — never by the pool resolver.
+
+### Consequence
+
+- Adding a pool family is a **one-line edit** in `column_map.py` plus CSS tokens.
+  No JavaScript change, no contract shape change, no re-run of the frontend to
+  teach it a new name.
+- The pool enum in `docs/DATA_CONTRACT.md` is now a projection of the family
+  table, not a second hand-maintained list.
+- Cost: the Python engine is now load-bearing for display order. A malformed
+  entry in `_POOL_FAMILY_RESOURCES` is a visible data defect rather than a
+  silent render drop — which is the point.
+
+## ADR-010 Workspace input/output layout, resolved from the repository root
+
+Input lives under `workspace/input/`, output under `workspace/output/`, and
+**both default paths resolve from the repository root, not from the current
+working directory**.
+
+### Context
+
+`ChangeOpsConsole` was inconsistent. Its **output** was already anchored to the
+module — `renderer.py:25,27` used `Path(__file__).parent.parent / "web"` and
+`/ "output"` — but its **input was a bare relative string**: `main.py:61` and
+`main.py:294` both used the literal `"data/ControlPases.xlsx"`, which resolves
+against the **current working directory**.
+
+That half-and-half split is the real defect, and it is a nasty one precisely
+because the output worked. Running the pipeline from anywhere other than the repo
+root failed with a bare `FileNotFoundError` on a file that plainly existed, and
+because output *did* land in the right place in the working cases, the failure
+looked like a missing or corrupt workbook rather than a CWD problem. A
+double-click, a Task Scheduler job, an IDE task, or a manual `cd` each needed the
+CWD to be the repo root.
+
+This app fixes both halves with one rule — nothing resolves against the CWD — and
+relocates both trees under a single `workspace/` namespace, so everything mutable
+and everything supplied externally is visible at a glance and separated from the
+source tree.
+
+### Decision
+
+| Path | Resolved from | Code |
+|------|---------------|------|
+| Default input | `REPO_ROOT / "workspace" / "input" / "ControlPases.xlsx"` | `python/main.py` |
+| Template + CSS + JS | `REPO_ROOT / "web"` | `python/renderer.py` |
+| Output | `REPO_ROOT / "workspace" / "output"` | `python/renderer.py` |
+
+`REPO_ROOT = Path(__file__).resolve().parent.parent` — the parent of the
+directory holding the module. `.resolve()` fully resolves symlinks and
+normalisation, which the inherited `Path(__file__).parent.parent` did not.
+`main.py` and `renderer.py` each compute it locally, because the `python/`
+modules are imported flat (they sit on `sys.path` via `conftest.py` or via the
+script's own directory), so they cannot share a package-relative import without
+restructuring the module convention.
+
+Because the anchor is `__file__` and not `os.getcwd()`, `main.py` resolves its
+own default input with **zero arguments** and still writes to the repository's
+own `workspace/output/`, from any directory. `sys.argv[1]`, when present,
+overrides only the input; the output directory is never configurable.
+
+### How to prove it
+
+Run the pipeline with **no arguments** from a directory that is not the repo
+root and confirm the artifacts land in the repository, not in the CWD:
+
+```powershell
+Set-Location C:\Windows
+& 'D:\IA_DEV\AgileOpsProd\.venv-win\Scripts\python.exe' 'D:\IA_DEV\AgileOpsProd\python\main.py'
+'EXIT=' + $LASTEXITCODE      # 0
+Get-ChildItem 'D:\IA_DEV\AgileOpsProd\workspace\output'
+```
+
+Expected: exit code `0`, and `dashboard.html`, `dashboard_data.json` and
+`diagnostic_report.json` freshly written under
+`D:\IA_DEV\AgileOpsProd\workspace\output\`. If the run instead reports a missing
+workbook or writes relative to `C:\Windows`, the root resolution has regressed.
+
+The same property is what makes the pipeline usable from Task Scheduler on the
+client machine, where the "Start in" directory is not the repo root and there
+are no `.bat` launchers to set it (see `workspace/input/dev-report.txt`).
+
+### Notes
+
+- `workspace/output/*` is git-ignored except `.gitkeep`;
+  `workspace/input/*.xlsx` is git-ignored entirely — the workbook is supplied
+  externally and is not versioned.
+- `renderer.py` substitutes the `<title>` tag by exact byte match
+  (`TEMPLATE_TITLE_TAG`). If `web/dashboard_template.html` changes that tag, the
+  renderer logs a warning and the HTML keeps the raw title.
+
 
 

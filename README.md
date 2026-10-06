@@ -1,0 +1,244 @@
+# AgileOps Prod Console
+
+A self-contained operational dashboard for the **AgileOps Prod pool families**.
+It reads one Excel control workbook and produces a single-file HTML dashboard
+plus the machine-readable contract and a diagnostic report.
+
+This repository is a **port of `D:\IA_DEV\ChangeOpsConsole`** — same pipeline
+shape, same window/KPI/timeline math, same web components — rescoped from the
+Legacy/Yape universe to the AgileOps Prod pools (Yape, S&F, AgileOps ORO,
+AgileOps Prod). It is a **separate application with its own history**, not a
+configuration of the original: mixing the two universes would corrupt both
+dashboards' KPIs and timelines.
+
+The ported pipeline logic is unchanged; the pool scope and the I/O layout are
+the two things that differ, and both are deliberate (ADR-009, ADR-010).
+
+---
+
+## Requirements
+
+- Python **3.12+** (`pyproject.toml` sets `requires-python = ">=3.12"`).
+- `pandas` + `openpyxl` to read the workbook (`requirements.txt`).
+- `pytest` + `ruff` to verify (`requirements-dev.txt`).
+- Node.js — **only** for `node --check` syntax validation of the two JS files.
+  The pipeline itself does not need Node.
+
+---
+
+## Setup
+
+```powershell
+# From the repository root
+cd D:\IA_DEV\AgileOpsProd
+
+python -m venv .venv-win
+.\.venv-win\Scripts\python.exe -m pip install --upgrade pip
+.\.venv-win\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+`requirements-dev.txt` pulls in `requirements.txt`, so the single install above
+covers runtime and tooling.
+
+> `pyproject.toml` declares a `[dependency-groups]` entry, but **pip does not
+> read dependency groups** — use `requirements-dev.txt`, not
+> `pip install --group dev`.
+
+If your machine has no Python on `PATH`, use the launcher:
+`py -3.12 -m venv .venv-win`.
+
+---
+
+## Run
+
+The workbook **must be placed at `workspace/input/ControlPases.xlsx`**. That is
+the default input path and the layout the code expects.
+
+```powershell
+# Default input — no arguments needed
+.\.venv-win\Scripts\python.exe python\main.py
+
+# Explicit input path (output directory is always workspace/output)
+.\.venv-win\Scripts\python.exe python\main.py "D:\somewhere\else\ControlPases.xlsx"
+```
+
+Both default paths resolve from the **repository root**, not from the current
+working directory, so the pipeline runs correctly from any directory — including
+Task Scheduler on the client machine, where the "Start in" folder is not the
+repo. This is ADR-010; how to prove it is in
+[`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md).
+
+### No `.bat` launchers
+
+**This repo ships no `.bat` files, by design.** They are blocked on the target
+corporate machine — the last line of `workspace/input/dev-report.txt` reads
+`NO usar .bat esta bloqueado en pc corporativa.` Use the PowerShell/cmd commands
+above instead.
+
+cmd.exe equivalents, if you prefer them:
+
+```cmd
+.venv-win\Scripts\python.exe -m pip install -r requirements-dev.txt
+.venv-win\Scripts\python.exe python\main.py
+.venv-win\Scripts\python.exe -m pytest -q
+.venv-win\Scripts\python.exe -m ruff check .
+```
+
+To open the result:
+
+```powershell
+Start-Process .\workspace\output\dashboard.html
+```
+
+### Output
+
+Three files, written to `workspace/output/`:
+
+| File | Contents |
+|------|----------|
+| `dashboard.html` | The dashboard. Fully self-contained: all CSS and JS inlined, contract embedded. SharePoint-safe — no network, no `localStorage`. |
+| `dashboard_data.json` | Data Contract v1 — the machine-readable contract. |
+| `diagnostic_report.json` | Processing statistics: row counts, scopes, window, conflicts, terminal-state breakdown. |
+
+`workspace/output/*` is git-ignored except `.gitkeep` — regenerate, don't commit.
+
+---
+
+## Verify
+
+```powershell
+cd D:\IA_DEV\AgileOpsProd
+
+.\.venv-win\Scripts\python.exe -m pytest -q          # expect: 84 passed
+.\.venv-win\Scripts\python.exe -m ruff check .       # expect: All checks passed!
+
+node --check web\components\timeline\timeline.js    # expect: exit 0, no output
+node --check web\dashboard.js                       # expect: exit 0, no output
+```
+
+`conftest.py` puts `python/` on `sys.path`, so tests import the pipeline modules
+by their flat names (`import adapter`, `import column_map`). No packaging step
+is needed. `ruff` config lives in `pyproject.toml` (`line-length = 100`,
+`select = ["E4", "E7", "E9", "F"]`, `ignore = ["E501"]`).
+
+> `python/table.py` and `python/timeline.py` are one-line placeholder stubs
+> (`"""Pendiente implementar."""`) inherited from `ChangeOpsConsole`. Nothing
+> imports them and nothing produces them — ignore them.
+
+An end-to-end smoke check is the pipeline run above: exit code `0` plus three
+fresh files in `workspace/output/`, with `meta.poolOrder` reporting exactly the
+four pool families.
+
+---
+
+## Layout
+
+```
+AgileOpsProd/
+├── python/                     the pipeline engine (flat modules, no package)
+│   ├── main.py                 entry point + CLI report
+│   ├── excel_reader.py         pandas read, column mapping, pool-scope filter
+│   ├── column_map.py           Excel→field map + THE pool family table (ADR-009)
+│   ├── rules.py                late start, ratification, conflicts
+│   ├── kpi.py                  KPI counters from rule flags
+│   ├── adapter.py              Data Contract v1, window math, meta.poolOrder
+│   └── renderer.py             writes dashboard.html / dashboard_data.json / diagnostic_report.json
+├── web/                        the frontend, inlined verbatim into the HTML
+│   ├── dashboard_template.html
+│   ├── theme.css               design tokens, pool colours, badges
+│   ├── dashboard.js            KPIs, operational table, drawers
+│   └── components/timeline/
+│       ├── timeline.js         CSS-Grid timeline (ADR-002), reads meta.poolOrder
+│       ├── timeline.css
+│       └── timeline.md
+├── tests/                      11 modules, 84 tests
+├── docs/
+│   ├── DATA_CONTRACT.md        the contract the engine and frontend share
+│   └── ARCHITECTURE_DECISIONS.md  ADR-001 .. ADR-010
+├── README.md                   this file
+├── workspace/
+│   ├── input/                  ControlPases.xlsx (supplied externally, not versioned)
+│   │                           + dev-report.txt
+│   └── output/                 generated artifacts (git-ignored)
+├── conftest.py                 puts python/ on sys.path for pytest
+├── pyproject.toml              deps, ruff config, pytest config
+├── requirements.txt            pandas, openpyxl
+└── requirements-dev.txt        + pytest, ruff
+```
+
+---
+
+## Pool families
+
+The timeline has **4 pool rows**. The `-DERIVADO` resource variants are the bar
+**type**, never a separate pool.
+
+| # | Pool (`pool` field) | CSS token | Matching `RECURSO` values | Rows in the current workbook |
+|---|---------------------|-----------|---------------------------|------------------------------|
+| 1 | `Yape` | `yape` | `POOL - YAPE`, `POOL - YAPE-DERIVADO` | 8 + 0 |
+| 2 | `S&F` | `sf` | `Pool S&F`, `POOL S&F-DERIVADO` | 59 + 47 |
+| 3 | `AgileOps ORO` | `agileops-oro` | `Pool AgileOps ORO`, `Pool AgileOps ORO - Derivado` | 32 + 39 |
+| 4 | `AgileOps Prod` | `agileops-prod` | `Pool AgileOps Prod`, `Pool AgileOps Prod - Derivado` | 231 + 155 |
+| | | | **Total in scope** | **571** |
+
+Display order is fixed at `Yape → S&F → AgileOps ORO → AgileOps Prod`, published
+by Python as `meta.poolOrder` and consumed by the web layer.
+
+Of the 1432 data rows in the workbook, **571 are in scope and 861 are ignored**.
+The excluded `RECURSO` values are `INFRAESTRUCTURA` (265), `AUTOMATIZADO` (248),
+`AUTOMATIZADO ITSM` (167), `EXPRESS AUTOMATICO` (136),
+`DC_CONNECTIVITY(TELECOM)` (20), `CyberSOC` (12), `EU_NETWORKING` (6),
+`OPERACIONES DATA` (5), `SelfServices APIG` (1), `SelfServices AGIL` (1).
+
+Note that `AUTOMATIZADO` and `AUTOMATIZADO ITSM` differ by one token. Inclusion
+is an **exact match on a whitespace/case-normalized value**, never a substring
+match — see ADR-009 for why that is a correctness requirement and not a style
+preference.
+
+---
+
+## Adding a new pool family
+
+One table is the only place to edit:
+
+**`python/column_map.py::_POOL_FAMILY_RESOURCES`** — append a
+`(display family, (RECURSO values...))` pair. Its **position is the display
+order**, and everything else is derived from it: the inclusion whitelist, the
+family index, `POOL_FAMILY_ORDER` and the `meta.poolOrder` the frontend reads.
+Nothing in `python/` or `web/` needs a second edit.
+
+Then, for the colours only:
+
+2. `web/theme.css` — declare `--color-<token>` (bar fill / badge background) and
+   `--pool-accent-<token>` for **both** the light and the dark theme block.
+3. `web/components/timeline/timeline.css` — bind the token:
+   `.timeline__pool-header--<token>` and `.timeline__bar--<token>`.
+4. `web/theme.css` — add `.badge--<token>`.
+
+The token itself is **computed**, not tabulated: `Timeline.poolKey()` slugifies
+the family name, so `S&F → sf` and `AgileOps ORO → agileops-oro` without any
+JavaScript edit. `dashboard.js` delegates to `window.Timeline.poolKey`, so the
+badge class cannot drift from the bar token.
+
+Finally, add the family to the pinned assertions in
+`tests/test_pool_scope.py` and to the `pool` enum table in
+`docs/DATA_CONTRACT.md`.
+
+---
+
+## Reading the output
+
+`dashboard_data.json` is the contract; `docs/DATA_CONTRACT.md` is its spec. Two
+entries in `diagnostic_report.json` are worth watching after any change:
+
+- `timelineScope` — bars in / out of the dynamic 8-hour window, and the per-pool
+  split.
+- `kpiScope` — how many in-scope rows were evaluated vs. how many were excluded
+  as terminal, with a per-state breakdown, plus the conflict and late-start
+  counts.
+
+Both are scoped differently from each other on purpose: the **timeline** shows
+the 8-hour slice, the **table** shows the live operational universe, and the
+**KPIs** run over the in-scope set with terminal states excluded (ADR-006). A
+number that looks inconsistent between the three is usually that difference, not
+a bug.
