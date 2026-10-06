@@ -1,0 +1,362 @@
+/*
+  Timeline Component — ADR-002
+  CSS Grid with layered architecture. NO <table>.
+
+  Layers:
+    1. __header       — hour labels (23:00, 00:00, 01:00 …)
+    2. __grid         — 30-min column lines
+    3. __bars         — operation bars (Legacy / Yape)
+    4. __indicators   — conflict triangles
+    5. __selection    — KPI-driven highlight overlay
+
+  Owner: TIMELINE_SPEC.md
+  Pool colours: Legacy #F6E7A7, Yape #E6D7FF
+
+  Phase 2 changes:
+    - Removed "now" line (static snapshot, not live tracking)
+    - Added __bar--dimmed for KPI filtering
+    - Added __bar--conflict for z-index boost on conflicting bars
+    - Overlap stacking handled by JS (timeline.js)
+
+  Phase 2.6 (Dashboard improvements):
+    - Pool group headers (Legacy / Yape)
+    - Row height increased to 44px for better readability
+*/
+
+/* =============================================  container  */
+.timeline {
+  --timeline-label-width: 220px;   /* sticky responsable column (v1.1.5) */
+  --timeline-header-height: 28px;      /* hour header row; top offset of every layer */
+  --timeline-pool-header-height: 28px; /* pool group header row */
+  position: relative;
+  width: 100%;
+  height: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* =============================================  layer base  */
+.timeline__header,
+.timeline__grid,
+.timeline__indicators,
+.timeline__selection {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.timeline__header     { z-index: 1; }
+.timeline__grid       { z-index: 2; }
+.timeline__bars       { z-index: 3; }
+.timeline__indicators { z-index: 4; }
+.timeline__selection  { z-index: 5; }
+
+/* =============================================  header  */
+.timeline__header {
+  display: flex;
+  align-items: flex-end;
+  height: var(--timeline-header-height);
+  /* scrolls horizontally with the time axis (the gutter is the sticky part) */
+  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 16);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-surface-alt);
+  z-index: 10;
+}
+
+.timeline__hour {
+  flex-shrink: 0;
+  width: calc(var(--timeline-grid-30min) * 2); /* 1 hour = 2 cells */
+  padding: 0 4px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: left;
+  border-left: 1px solid var(--border-color);
+}
+
+.timeline__hour:first-child {
+  border-left: none;
+}
+
+/* Sticky gutter that covers the time axis behind the responsable column */
+.timeline__header-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex: 0 0 var(--timeline-label-width);
+  align-self: stretch;
+  background: var(--bg-surface-alt);
+  border-right: 1px solid var(--border-color);
+}
+
+/* =============================================  grid  */
+.timeline__grid {
+  display: flex;
+  padding-top: var(--timeline-header-height);
+  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 16);
+}
+
+.timeline__grid-col {
+  flex-shrink: 0;
+  width: var(--timeline-grid-30min);
+  height: 100%;
+  border-left: 1px solid var(--timeline-grid-line);
+}
+
+/* Grid gutter aligned with the responsable column (covered by the row labels) */
+.timeline__grid-gutter {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  flex: 0 0 var(--timeline-label-width);
+  align-self: stretch;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+}
+
+/* Half-hour subdivision — lighter dashed line */
+.timeline__grid-col::after {
+  content: '';
+  position: absolute;
+  top: var(--timeline-header-height);
+  left: calc(var(--timeline-grid-30min) / 2);
+  width: 0;
+  height: calc(100% - var(--timeline-header-height));
+  border-left: 1px dashed var(--timeline-grid-line);
+  opacity: 0.4;
+}
+
+/* =============================================  pool headers  */
+.timeline__pool-header {
+  position: relative;
+  display: flex;
+  height: var(--timeline-pool-header-height);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary);
+  z-index: 8;
+}
+
+/* Pool label shares the responsable column and stays pinned (like the
+   responsable labels) while the timeline scrolls horizontally, so a row never
+   loses its Legacy/Yape context. */
+.timeline__pool-label {
+  position: sticky;
+  left: 0;
+  flex: 0 0 var(--timeline-label-width);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--bg-surface);
+  border-right: 3px solid var(--pool-accent, var(--border-color));
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.timeline__pool-header--legacy { --pool-accent: #B45309; }
+.timeline__pool-header--yape   { --pool-accent: #7C3AED; }
+
+.timeline__pool-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.timeline__pool-name {
+  flex: 0 0 auto;
+}
+
+.timeline__pool-counts {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: normal;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =============================================  bars  */
+.timeline__bars {
+  position: relative;
+  padding-top: var(--timeline-header-height);
+  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 16);
+}
+
+/* Row — one single row per RECURSO ASIGNADO (v1.1.5) */
+.timeline__row {
+  position: relative;
+  display: flex;
+  height: var(--timeline-row-height);
+}
+
+/* Left column: responsable, sticky during horizontal scroll */
+.timeline__row-label {
+  position: sticky;
+  left: 0;
+  z-index: 6;
+  flex: 0 0 var(--timeline-label-width);
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 8px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Right column: lane where every bar of that responsable is drawn */
+.timeline__row-lane {
+  position: relative;
+  flex: 1 0 auto;
+  min-width: calc(var(--timeline-grid-30min) * 16);  /* 8 h = 16 cells */
+}
+
+/* Individual bar */
+.timeline__bar {
+  position: absolute;
+  height: calc(var(--timeline-row-height) - var(--timeline-gap) * 2);
+  top: var(--timeline-gap);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: filter .15s, box-shadow .15s, opacity .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-align: center;
+  color: rgba(0,0,0,.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timeline__bar:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--text-primary);
+}
+
+/* Pool fills */
+.timeline__bar--legacy {
+  background: var(--color-legacy);
+}
+
+.timeline__bar--yape {
+  background: var(--color-yape);
+}
+
+/* Status modifiers */
+.timeline__bar--pase-en-curso {
+  background: var(--color-success);
+  color: #FFFFFF;
+}
+
+.timeline__bar--inicio-atrasado {
+  background: var(--color-warning);
+  color: #FFFFFF;
+  border: 2px solid var(--color-conflict);
+}
+
+/* ---- Derivado: subtle dashed inner frame so it reads apart from
+   Implementación without changing layout (outline never shifts boxes) ---- */
+.timeline__bar--derivado {
+  outline: 1.5px dashed rgba(0,0,0,.45);
+  outline-offset: -3px;
+}
+
+/* ---- KPI filter: dimmed bars ---- */
+.timeline__bar--dimmed {
+  opacity: 0.15;
+  filter: grayscale(0.6);
+  pointer-events: none;
+}
+
+/* ---- Conflict: boost z-index so triangle shows above stacked bars ---- */
+.timeline__bar--conflict {
+  z-index: 2;
+}
+
+/* =============================================  indicators  */
+.timeline__indicators {
+  /* triangles carry an explicit top (row-aligned) — no padding needed */
+  padding-top: 0;
+  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 16);
+  pointer-events: none;
+}
+
+/* Conflict triangle — orange, points down */
+.timeline__conflict {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 10px solid var(--color-conflict);
+  z-index: 5;
+  pointer-events: auto;
+  cursor: help;
+}
+
+.timeline__conflict::after {
+  content: '⚠';
+  position: absolute;
+  top: -14px;
+  left: -6px;
+  font-size: 12px;
+}
+
+/* =============================================  selection  */
+.timeline__selection {
+  padding-top: var(--timeline-header-height);
+  pointer-events: none;
+}
+
+.timeline__select-highlight {
+  position: absolute;
+  height: var(--timeline-row-height);
+  top: var(--timeline-gap);
+  background: rgba(59, 130, 246, .12);
+  border: 2px solid rgba(59, 130, 246, .4);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* =============================================  responsive  */
+@media (max-width: 768px) {
+  .timeline__hour {
+    font-size: 10px;
+    width: calc(var(--timeline-grid-30min) * 1.5);
+  }
+
+  .timeline__bar {
+    font-size: 9px;
+    padding: 0 4px;
+  }
+
+  .timeline__pool-header {
+    font-size: 10px;
+  }
+
+  .timeline__pool-counts {
+    font-size: 9px;
+  }
+}

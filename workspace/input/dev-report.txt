@@ -1,0 +1,72 @@
+============================================================
+DEVELOPMENT ENVIRONMENT REPORT
+============================================================
+
+SYSTEM
+------
+computer: W365erickg5OWKY
+user: T03819
+os: Windows-11-10.0.26200-SP0
+python_arch: 64bit
+cwd: C:\Users\T03819\Downloads
+python_version: 3.12.14
+
+TOOLS
+-----
+python       OK  Python 3.12.14
+pip          OK  pip 26.2.1 from C:\Users\T03819\AppData\Roaming\Python\Python312\site-packages\pip (python 3.12)
+pytest       OK  pytest 9.1.1
+ruff         OK  ruff 0.16.9
+git          OK  git version 2.52.0.windows.1
+node         OK  v22.23.2
+npm          NO  [WinError 2] El sistema no puede encontrar el archivo especificado
+java         OK  openjdk version "17.0.13" 2024-10-15
+code         NO  [WinError 2] El sistema no puede encontrar el archivo especificado
+uv           NO  Not found in PATH
+docker       NO  Not found in PATH
+curl         OK  curl 8.21.0 (Windows) libcurl/8.21.0 Schannel zlib/1.3.2 WinIDN WinLDAP
+ssh          OK  OpenSSH_for_Windows_9.5p2, LibreSSL 3.8.2
+winget       OK  v1.29.380
+
+EXECUTABLES
+-----------
+python: C:\WINDOWS\py.EXE
+pip: C:\WINDOWS\py.EXE
+pytest: C:\WINDOWS\py.EXE
+ruff: C:\WINDOWS\py.EXE
+git: C:\Program Files\Git\cmd\git.EXE
+node: C:\Program Files\nodejs\node.EXE
+npm: C:\Program Files\nodejs\npm.CMD
+java: C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot\bin\java.EXE
+code: C:\Program Files\Microsoft VS Code\bin\code.CMD
+uv: None
+docker: None
+curl: C:\WINDOWS\system32\curl.EXE
+ssh: C:\WINDOWS\System32\OpenSSH\ssh.EXE
+winget: C:\Users\T03819\AppData\Local\Microsoft\WindowsApps\winget.EXE
+
+WRITE PERMISSIONS
+-----------------
+C:\Users\T03819\Downloads: True
+C:\Users\T03819: True
+
+PATH
+----
+C:\Program Files\Python312\Scripts\
+C:\Program Files\Python312\
+C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot\bin
+C:\WINDOWS\system32
+C:\WINDOWS
+C:\WINDOWS\System32\Wbem
+C:\WINDOWS\System32\WindowsPowerShell\v1.0\
+C:\WINDOWS\System32\OpenSSH\
+C:\Program Files\PuTTY\
+C:\Program Files (x86)\Microsoft SQL Server\160\DTS\Binn\
+C:\Program Files\Azure Data Studio\bin
+C:\Program Files\Microsoft VS Code\bin
+C:\Program Files\Git\cmd
+C:\Program Files\nodejs\
+C:\Program Files (x86)\JetBrains\PyCharm Community Edition 2026.1.4\bin
+C:\Users\T03819\AppData\Local\Microsoft\WindowsApps
+
+NO usar .bat esta bloqueado en pc corporativa.

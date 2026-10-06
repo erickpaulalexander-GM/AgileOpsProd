@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgileOps Prod Console</title>
+  <link rel="stylesheet" href="theme.css">
+  <link rel="stylesheet" href="components/timeline/timeline.css">
+</head>
+<body>
+
+  <!-- ============ DASHBOARD GRID ============ -->
+  <div class="dashboard-grid">
+
+    <!-- HEADER -->
+    <header class="topbar">
+      <h1>AgileOps Prod Console</h1>
+      <div class="topbar-meta">
+        <span id="sync-indicator" class="sync-indicator" aria-label="Estado de sincronización"></span>
+        <span id="last-update">—</span>
+        <button class="theme-toggle" id="theme-toggle" aria-label="Cambiar tema">🌙</button>
+      </div>
+    </header>
+
+    <!-- KPI CARDS — 4 slots, populated by dashboard.js -->
+    <section class="kpi-section" id="kpi-section">
+      <div class="kpi-card kpi-card--neutral" data-kpi="total">
+        <span class="kpi-card__label">Total Pases</span>
+        <span class="kpi-card__value" id="kpi-total">—</span>
+      </div>
+      <div class="kpi-card kpi-card--positive" data-kpi="coordinados">
+        <span class="kpi-card__label">Coordinados</span>
+        <span class="kpi-card__value" id="kpi-coordinados">—</span>
+      </div>
+      <div class="kpi-card kpi-card--warning" data-kpi="en-curso">
+        <span class="kpi-card__label">En Curso</span>
+        <span class="kpi-card__value" id="kpi-en-curso">—</span>
+      </div>
+      <div class="kpi-card kpi-card--negative" data-kpi="atrasados">
+        <span class="kpi-card__label">Atrasados</span>
+        <span class="kpi-card__value" id="kpi-atrasados">—</span>
+      </div>
+    </section>
+
+    <!-- TIMELINE — 60-65 % height, ADR-002 layered grid -->
+    <section class="timeline-section" id="timeline-section">
+      <div class="timeline" id="timeline" role="img" aria-label="Timeline de pases">
+        <!-- Capa 1: Header de horas -->
+        <div class="timeline__header" id="timeline-header"></div>
+        <!-- Capa 2: Grid de 30 min -->
+        <div class="timeline__grid" id="timeline-grid"></div>
+        <!-- Capa 3: Barras -->
+        <div class="timeline__bars" id="timeline-bars"></div>
+        <!-- Capa 4: Indicadores (conflictos) -->
+        <div class="timeline__indicators" id="timeline-indicators"></div>
+        <!-- Capa 5: Selección (resaltado KPI) -->
+        <div class="timeline__selection" id="timeline-selection"></div>
+      </div>
+    </section>
+
+    <!-- TABLE — dinámica, filtrable -->
+    <section class="table-section" id="table-section">
+      <table>
+        <thead id="table-head"></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </section>
+
+  </div>
+  <!-- ============ /DASHBOARD GRID ============ -->
+
+  <!-- DRAWER — outside grid, toggled by JS -->
+  <aside class="drawer" id="drawer" aria-hidden="true">
+    <div class="drawer__header">
+      <span class="drawer__title" id="drawer-title">Detalle</span>
+      <button class="drawer__close" id="drawer-close" aria-label="Cerrar">×</button>
+    </div>
+    <div class="drawer__body" id="drawer-body"></div>
+  </aside>
+  <div class="drawer-overlay" id="drawer-overlay"></div>
+
+  <script src="data/mock-operations.js"></script>
+  <script src="components/timeline/timeline.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>
