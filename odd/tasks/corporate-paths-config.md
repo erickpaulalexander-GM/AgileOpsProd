@@ -76,8 +76,8 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07: rama `feature/corporate-paths-config` creada desde `main`. Doc creado, 3 tareas. Sin writes de fuente aún.
 - 2026-10-07 T1 done: RED `ModuleNotFoundError: No module named 'config'` → GREEN `tests/test_config.py 4 passed` + `ruff check` limpio. Commit `586e234`.
 - 2026-10-07 T2 done: wiring con compat (renderer.OUTPUT_DIR parcheable, seam _now honrado). `pytest 141 passed` + `ruff` limpio. Commit `85c4461`.
-- 2026-10-07 T3 done: `run.py` raíz + README (config + Scheduler a run.py) + fix output custom por cfg. Static: ruff ok, `pytest 141 passed`, `node --check` x2 ok. Smoke `run.py --now "2026-10-06 09:55"`: exit 0, 1432 leídas/571 en scope, 3 archivos frescos, poolOrder 4 + 3 groups, diag env=DEV cfg=file tz=America/Lima. Custom output_dir a tmp: 3 archivos EXISTS True.
+- 2026-10-07 T3 done: `run.py` raíz + README (config + Scheduler a run.py) + fix output custom por cfg. Static: ruff ok, `pytest 141 passed`, `node --check` x2 ok. Smoke `run.py --now "2026-10-06 09:55"`: exit 0, 1432 leídas/571 en scope, 3 archivos frescos, poolOrder 4 + 3 groups, diag env=DEV cfg=file tz=America/Lima. Custom output_dir a tmp: 3 archivos EXISTS True. Commit `fa855f8`.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 
 ## Next step
-T1: crear test RED del loader + `python/config.py` + `config.yaml` + dep `pyyaml`.
+Hecho: las 3 tareas están en verde. Falta la decisión de entrega (la rama acumula ~490 líneas: con `ask-on-risk` el usuario elige slice/PR) y el push/PR, que son decisión tuya.
