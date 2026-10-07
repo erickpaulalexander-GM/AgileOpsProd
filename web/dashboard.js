@@ -91,6 +91,15 @@
   /* =========================================================
      SYNC INDICATOR — shows data freshness
      ========================================================= */
+  // T9: minutos desde el mtime del Excel para marcar fuente desactualizada.
+  var SOURCE_STALE_MIN = 30;
+
+  // T9: "2026-10-07T17:11:24" -> "07/10/2026 17:11" (criollo, como drawers).
+  function _formatStamp(iso) {
+    var m = /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(String(iso));
+    if (!m) return String(iso);
+    return m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+  }
   function updateSyncIndicator() {
     var indicatorEl = document.getElementById('sync-indicator');
     var textEl = document.getElementById('last-update');
@@ -113,13 +122,30 @@
     // Update text (keep existing format)
     textEl.textContent = 'Actualización: ' + DATA.meta.updatedAt;
 
-    // T8: source stamp — evidencia el archivo fuente para juzgar frescura.
+    // T8/T9: source stamp — evidencia el archivo fuente para juzgar frescura.
+    // Fecha legible + alerta roja con icono si supera SOURCE_STALE_MIN.
     // Archivos viejos no traen window.AgileOpsSource: se deja el placeholder.
     var sourceEl = document.getElementById('source-stamp');
     var src = (typeof window !== 'undefined') ? window.AgileOpsSource : null;
     if (sourceEl && src && src.file) {
-      sourceEl.textContent = 'Fuente: ' + src.file +
-        (src.mtime ? ' · ' + src.mtime : '');
+      var stamp = 'Fuente: ' + src.file;
+      var ageMin = -1;
+      if (src.mtime) {
+        stamp += ' · ' + _formatStamp(src.mtime);
+        var mt = new Date(src.mtime).getTime();
+        if (!isNaN(mt)) ageMin = Math.max(0, Math.round((Date.now() - mt) / 60000));
+      }
+      if (ageMin >= SOURCE_STALE_MIN) {
+        sourceEl.textContent = stamp + ' · hace ' + ageMin + ' min';
+        sourceEl.classList.add('source-stamp--stale');
+        sourceEl.title = 'Fuente desactualizada: el archivo tiene más de ' +
+          SOURCE_STALE_MIN + ' min';
+        var iconWrap = document.createElement('span');
+        iconWrap.innerHTML = '<svg class="sync-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        sourceEl.insertBefore(iconWrap.firstChild, sourceEl.firstChild);
+      } else {
+        sourceEl.textContent = stamp;
+      }
     }
   }
 

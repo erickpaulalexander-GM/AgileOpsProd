@@ -58,6 +58,7 @@ Out:
 - [x] T6 — Indicador pases colgados (route: inline; test-first RED→GREEN)
 - [x] T7 — Lenguaje banco: orden + renombres de tarjetas (route: inline)
 - [x] T8 — Sello de fuente en el header (route: inline; test-first RED→GREEN)
+- [x] T9 — Alerta fuente >30min + formato legible (route: inline; JS solo-front)
 
 ## Acceptance criteria
 - Con `config.yaml` por defecto, `run.py` y `python/main.py` generan los mismos 3 outputs que hoy en `workspace/output/`.
@@ -92,6 +93,7 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T6 done: `staleInFlight` (en curso con FIN pasado) con tarjeta `Pases colgados` + drawer + scopes por grupo + diagnóstico + reporte. RED `ImportError` → GREEN `pytest 162 passed` + `ruff` + `node --check`. Smoke en vivo 17:46: 21 colgados (todos agileops), 0 en vuelo. Docs: DATA_CONTRACT v1.5 + ADR-008. Commit `50892a6`.
 - 2026-10-07 T7 done: orden En curso → Atrasados → Fuera de ventana → Ratis; renombres `Pases en vuelo`→`Pases en curso`, `Pases colgados`→`Pases fuera de ventana` (JS+template+reporte+docs; keys del contrato intactas). `pytest 162 passed` + `ruff` + `node --check`. Regen en vivo 17:51 ok. Commit `6cdda4f`.
 - 2026-10-07 T8 done: header evidencia `Fuente: <archivo> · <mtime>` junto a Actualización vía `window.AgileOpsSource` (payload separado, contrato intacto). RED 2 fail → GREEN `pytest 165 passed` + `ruff` + `node --check`. Regen en vivo 17:57 con sello real 17:11:24. Docs: DATA_CONTRACT v1.6 + README. Commit `a842750`.
+- 2026-10-07 T9 done: `Fuente: <arch> · DD/MM/YYYY HH:MM` + icono rojo y `hace N min` si supera 30 min (`SOURCE_STALE_MIN`, tooltip). Sin tests python (lógica solo-front); `node --check` ok + regen en vivo.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 
 ## Next step
