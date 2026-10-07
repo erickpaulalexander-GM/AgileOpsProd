@@ -55,6 +55,28 @@ def filter_in_flight(
 ) -> list[dict[str, Any]]:
     """Pases en vuelo sobre el universo operativo (ver is_in_flight_now)."""
     return [r for r in rows if is_in_flight_now(r, reference)]
+
+
+def is_stale_in_flight(row: dict[str, Any], reference: datetime) -> bool:
+    """True si el pase quedo colgado en curso con el FIN ya pasado.
+
+    T6: son los tickets fantasma — fuera de timeline (inicio viejo), fuera
+    de tabla (fin pasado) y fuera de drawers, salvo ratificacion vencida
+    de casualidad. Sin FIN valido no se juzga: no se puede probar pasado.
+    """
+    if _norm_estado(row.get("estado")) != IN_FLIGHT_STATE:
+        return False
+    fin = row.get("fin_impl")
+    if not isinstance(fin, datetime):
+        return False
+    return fin < reference
+
+
+def filter_stale_in_flight(
+    rows: list[dict[str, Any]], reference: datetime
+) -> list[dict[str, Any]]:
+    """Pases colgados en curso (ver is_stale_in_flight)."""
+    return [r for r in rows if is_stale_in_flight(r, reference)]
 WEB_DIR = REPO_ROOT / "web"
 TEMPLATE_PATH = WEB_DIR / "dashboard_template.html"
 OUTPUT_DIR = REPO_ROOT / "workspace" / "output"
@@ -105,19 +127,24 @@ def build_actions(
     rows_r1: list[dict[str, Any]],
     rows_in_window: list[dict[str, Any]],
     in_flight_rows: list[dict[str, Any]] | None = None,
+    stale_in_flight_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Build the window.ChangeOpsActions payload (ADR-008).
 
     No business rules are added here: the lists are derived from the rule
     flags already computed by rules.py (`_late_start`, `_ratification_soon`,
-    `_ratification_expired`) — except `inFlightNow`, which is the T5
-    en-vuelo scope (estado en curso cubriendo la referencia) computed by
-    the caller with filter_in_flight() over the operational universe.
+    `_ratification_expired`) — except `inFlightNow` (T5 en-vuelo scope) and
+    `staleInFlight` (T6 colgados: en curso con FIN pasado), both precomputed
+    by the caller with filter_in_flight() / filter_stale_in_flight() over the
+    operational universe.
     """
     return {
         "passesInWindow": [_action_record(r, "impl") for r in rows_in_window],
         "inFlightNow": [_action_record(r, "impl") for r in (in_flight_rows or [])],
+        "staleInFlight": [
+            _action_record(r, "impl") for r in (stale_in_flight_rows or [])
+        ],
         "lateStarts": [
             _action_record(r, "impl") for r in rows_r1 if r.get("_late_start")
         ],

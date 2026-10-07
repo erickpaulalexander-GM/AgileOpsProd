@@ -55,6 +55,7 @@ Out:
 - [x] T3 — Ejecutor raíz `run.py` + docs Scheduler + verificación total (route: inline)
 - [x] T4 — `run.py` auto-bootstrap al venv (route: inline; un archivo mecánico)
 - [x] T5 — KPI pases en vuelo (route: inline; test-first RED→GREEN)
+- [x] T6 — Indicador pases colgados (route: inline; test-first RED→GREEN)
 
 ## Acceptance criteria
 - Con `config.yaml` por defecto, `run.py` y `python/main.py` generan los mismos 3 outputs que hoy en `workspace/output/`.
@@ -86,6 +87,7 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T3 done: `run.py` raíz + README (config + Scheduler a run.py) + fix output custom por cfg. Static: ruff ok, `pytest 141 passed`, `node --check` x2 ok. Smoke `run.py --now "2026-10-06 09:55"`: exit 0, 1432 leídas/571 en scope, 3 archivos frescos, poolOrder 4 + 3 groups, diag env=DEV cfg=file tz=America/Lima. Custom output_dir a tmp: 3 archivos EXISTS True. Commit `fa855f8`.
 - 2026-10-07 T4 done: `run.py` re-ejecuta con `.venv-win` si al intérprete le falta pandas (`py run.py` directo). Detalle: `os.execv` en Windows parte args con espacios (reproducido aislado) → se usa `subprocess.call` con exit code propagado. `ruff` limpio + `py run.py --now '2026-10-06 09:55'` end-to-end ok. Commit `147b8dc`.
 - 2026-10-07 T5 done: definición del cliente = estado `Pase en curso` (sale de la tabla) con `INI<=ahora<=FIN`, sobre el universo operativo (no solo la ventana). Campo aditivo `inFlightNow` (payload global + tickets por grupo + diagnóstico); tarjeta titular + drawer + reporte muestran eso como `Pases en vuelo`; `passesInWindow` intacto para el Timeline. RED `ImportError filter_in_flight` → GREEN `pytest 152 passed` + `ruff` + `node --check` x2. Tests que pineaban 4 scopes actualizados a 5 (cambio deliberado). Smoke pineado 09:55: 45 en ventana vs 2 en vuelo. Docs: DATA_CONTRACT v1.4 + ADR-008. Commit `460b018`.
+- 2026-10-07 T6 done: `staleInFlight` (en curso con FIN pasado) con tarjeta `Pases colgados` + drawer + scopes por grupo + diagnóstico + reporte. RED `ImportError` → GREEN `pytest 162 passed` + `ruff` + `node --check`. Smoke en vivo 17:46: 21 colgados (todos agileops), 0 en vuelo. Docs: DATA_CONTRACT v1.5 + ADR-008.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 
 ## Next step

@@ -258,7 +258,7 @@
     var tickets = group && group.raw ? group.raw.tickets : null;
     if (!tickets || typeof tickets !== 'object') return null;
     var set = {};
-    ['passesInWindow', 'lateStarts', 'ratificationsSoon', 'ratificationsExpired', 'inFlightNow']
+    ['passesInWindow', 'lateStarts', 'ratificationsSoon', 'ratificationsExpired', 'inFlightNow', 'staleInFlight']
       .forEach(function (scope) {
         var list = tickets[scope];
         if (!Array.isArray(list)) return;
@@ -306,6 +306,7 @@
     var actions = {
       passesInWindow: ACTIONS && Array.isArray(ACTIONS.passesInWindow) ? ACTIONS.passesInWindow : [],
       inFlightNow: ACTIONS && Array.isArray(ACTIONS.inFlightNow) ? ACTIONS.inFlightNow : [],
+      staleInFlight: ACTIONS && Array.isArray(ACTIONS.staleInFlight) ? ACTIONS.staleInFlight : [],
       lateStarts: ACTIONS && Array.isArray(ACTIONS.lateStarts) ? ACTIONS.lateStarts : [],
       ratificationsSoon: ACTIONS && Array.isArray(ACTIONS.ratificationsSoon) ? ACTIONS.ratificationsSoon : [],
       ratificationsExpired: ACTIONS && Array.isArray(ACTIONS.ratificationsExpired) ? ACTIONS.ratificationsExpired : [],
@@ -315,6 +316,7 @@
         actions = {
           passesInWindow: _filterActionList(actions.passesInWindow),
           inFlightNow: _filterActionList(actions.inFlightNow),
+          staleInFlight: _filterActionList(actions.staleInFlight),
           lateStarts: _filterActionList(actions.lateStarts),
           ratificationsSoon: _filterActionList(actions.ratificationsSoon),
           ratificationsExpired: _filterActionList(actions.ratificationsExpired),
@@ -352,6 +354,7 @@
     // _groupView(), so this total can never count another pool's passes.
     // T5: the headline total is EN VUELO (en curso ahora), not in-window.
     set('kpi-total', view.actions.inFlightNow.length);
+    set('kpi-colgados', view.actions.staleInFlight.length);
     set('kpi-atrasados', kpis.lateStarts);
     set('kpi-coordinados', kpis.ratificationsSoon);
     set('kpi-en-curso', kpis.ratificationsExpired);
@@ -362,6 +365,7 @@
   function _applyKPILabels() {
     var labels = {
       'total': 'Pases en vuelo',
+      'colgados': 'Pases colgados',
       'atrasados': 'Pases atrasados',
       'coordinados': 'Ratificaciones por vencer',
       'en-curso': 'Ratificaciones vencidas',
@@ -376,7 +380,7 @@
       }
     });
     // Reorder cards to the v1.1 action-model order
-    ['total', 'atrasados', 'coordinados', 'en-curso'].forEach(function (key) {
+    ['total', 'colgados', 'atrasados', 'coordinados', 'en-curso'].forEach(function (key) {
       var card = section.querySelector('.kpi-card[data-kpi="' + key + '"]');
       if (card) section.appendChild(card);
     });
@@ -410,6 +414,8 @@
     var A = view.actions;
     if (key === 'total') {
       openActionDrawer('Pases en vuelo', A.inFlightNow, 'inFlightNow');
+    } else if (key === 'colgados') {
+      openActionDrawer('Pases colgados', A.staleInFlight, 'staleInFlight');
     } else if (key === 'atrasados') {
       openActionDrawer('Pases atrasados', A.lateStarts, 'lateStarts');
     } else if (key === 'coordinados') {

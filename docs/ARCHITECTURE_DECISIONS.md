@@ -230,6 +230,7 @@ window.ChangeOpsActions = {
   ratificationsSoon:    [ … ],
   ratificationsExpired: [ … ],
   inFlightNow:          [ … ]   // T5 (2026-10-07): en curso cubriendo updatedAt
+  staleInFlight:         [ … ]   // T6 (2026-10-07): en curso con FIN pasado
 }
 ```
 
@@ -244,6 +245,8 @@ para el cálculo; ADR-008 lo re-habilita únicamente para mostrarlo).
 - **Pases en ventana** → scroll al Timeline + resaltado ~1 s (sin Drawer).
   **Pases en vuelo** (T5) → Action Drawer con `inFlightNow`; la tarjeta
   titular muestra este scope, no la ventana.
+  **Pases colgados** (T6) → Action Drawer con `staleInFlight`; tarjeta
+  propia porque estos tickets no aparecen en ningun otro lado.
 - **Pases atrasados / Rati. por vencer / Rati. vencidas** → Action Drawer
   (reutiliza el Drawer derecho existente; sin modales nuevos).
 - Ticket clicable (`<a target="_blank">`, cursor pointer, Enter nativo) →

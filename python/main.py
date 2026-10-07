@@ -40,7 +40,7 @@ from config import (
 )
 import renderer as renderer_mod
 from excel_reader import read_excel
-from renderer import build_actions, filter_in_flight, render_dashboard
+from renderer import build_actions, filter_in_flight, filter_stale_in_flight, render_dashboard
 from kpi import update_contract_kpis, update_contract_visibility_kpis
 from rules import apply_rules, collect_conflicts, filter_operational, is_terminal
 
@@ -283,6 +283,11 @@ def main(
     rows_in_flight = filter_in_flight(rows_all, anchor_dt)
     logger.info("In-flight now (Pases en vuelo): %d", len(rows_in_flight))
 
+    # T6: Colgados = en curso con FIN pasado. Invisibles en timeline, tabla
+    # y drawers (salvo rati vencida de casualidad): indicador propio.
+    rows_stale = filter_stale_in_flight(rows_all, anchor_dt)
+    logger.info("Stale in-flight (Pases colgados): %d", len(rows_stale))
+
     # Step 5: Convert to Data Contract v1.
     #   - Timeline scope: in-window rows.
     #   - Table scope: the full in-scope pool operational universe.
@@ -305,12 +310,19 @@ def main(
     # Without this the KPI cards would keep showing the aggregate of ALL pools,
     # leaking the hidden pools' counts through the selector.
     contract = update_contract_visibility_kpis(
-        contract, rows_all, rows_timeline, in_flight_rows=rows_in_flight
+        contract,
+        rows_all,
+        rows_timeline,
+        in_flight_rows=rows_in_flight,
+        stale_in_flight_rows=rows_stale,
     )
 
     # Step 7: Build action payload (ADR-008) and the diagnostic report
     actions = build_actions(
-        rows_all, rows_timeline, in_flight_rows=rows_in_flight
+        rows_all,
+        rows_timeline,
+        in_flight_rows=rows_in_flight,
+        stale_in_flight_rows=rows_stale,
     )
     operational_rows = filter_operational(rows_all)  # ADR-006
     conflicts = collect_conflicts(rows_all)          # only non-terminal pairs
@@ -403,6 +415,7 @@ def main(
             "actionPayload": {
                 "passesInWindow": len(actions["passesInWindow"]),
                 "inFlightNow": len(actions["inFlightNow"]),
+                "staleInFlight": len(actions["staleInFlight"]),
                 "lateStarts": len(actions["lateStarts"]),
                 "ratificationsSoon": len(actions["ratificationsSoon"]),
                 "ratificationsExpired": len(actions["ratificationsExpired"]),
@@ -504,6 +517,7 @@ def _print_report(
         print("  ACTION PAYLOAD — window.ChangeOpsActions (ADR-008)")
         print(f"    Pases en ventana                    : {ap.get('passesInWindow', 0)}")
         print(f"    Pases en vuelo (en curso ahora)      : {ap.get('inFlightNow', 0)}")
+        print(f"    Pases colgados (en curso, FIN pasado): {ap.get('staleInFlight', 0)}")
         print(f"    Pases atrasados                     : {ap.get('lateStarts', 0)}")
         print(f"    Ratificaciones por vencer           : {ap.get('ratificationsSoon', 0)}")
         print(f"    Ratificaciones vencidas             : {ap.get('ratificationsExpired', 0)}")
@@ -524,6 +538,7 @@ def _print_report(
                   f"familias={', '.join(group['families'])}  "
                   f"pases_en_ventana={len(tickets.get('passesInWindow', []))}  "
                   f"en_vuelo={len(tickets.get('inFlightNow', []))}  "
+                  f"colgados={len(tickets.get('staleInFlight', []))}  "
                   f"atrasados={kpis.get('lateStarts', 0)}  "
                   f"rati_por_vencer={kpis.get('ratificationsSoon', 0)}  "
                   f"rati_vencidas={kpis.get('ratificationsExpired', 0)}")
