@@ -23,6 +23,38 @@ logger = logging.getLogger(__name__)
 
 # Paths — resolved from the repository root so the pipeline runs from any CWD.
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Estado que cuenta como "en vuelo": el pase se esta ejecutando ahora mismo
+# (T5, pedido del cliente). Comparacion normalizada como la tabla.
+IN_FLIGHT_STATE = "pase en curso"
+
+
+def _norm_estado(value: Any) -> str:
+    """Lowercase + whitespace colapsado para comparar estados."""
+    return " ".join(str(value or "").split()).lower()
+
+
+def is_in_flight_now(row: dict[str, Any], reference: datetime) -> bool:
+    """True si el pase se ejecuta en `reference`: en curso y cubriendolo.
+
+    Subconjunto de la tabla operativa (mismo universo: estados activos +
+    trabajo vivo), restringido a estado en curso ya iniciado. Las fechas
+    ausentes/invalidas no cuentan — igual que la tabla, que exige ambas.
+    """
+    if _norm_estado(row.get("estado")) != IN_FLIGHT_STATE:
+        return False
+    inicio = row.get("inicio_impl")
+    fin = row.get("fin_impl")
+    if not isinstance(inicio, datetime) or not isinstance(fin, datetime):
+        return False
+    return inicio <= reference <= fin
+
+
+def filter_in_flight(
+    rows: list[dict[str, Any]], reference: datetime
+) -> list[dict[str, Any]]:
+    """Pases en vuelo sobre el universo operativo (ver is_in_flight_now)."""
+    return [r for r in rows if is_in_flight_now(r, reference)]
 WEB_DIR = REPO_ROOT / "web"
 TEMPLATE_PATH = WEB_DIR / "dashboard_template.html"
 OUTPUT_DIR = REPO_ROOT / "workspace" / "output"
@@ -72,16 +104,20 @@ def _action_record(row: dict[str, Any], kind: str) -> dict[str, Any]:
 def build_actions(
     rows_r1: list[dict[str, Any]],
     rows_in_window: list[dict[str, Any]],
+    in_flight_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Build the window.ChangeOpsActions payload (ADR-008).
 
     No business rules are added here: the lists are derived from the rule
     flags already computed by rules.py (`_late_start`, `_ratification_soon`,
-    `_ratification_expired`).
+    `_ratification_expired`) — except `inFlightNow`, which is the T5
+    en-vuelo scope (estado en curso cubriendo la referencia) computed by
+    the caller with filter_in_flight() over the operational universe.
     """
     return {
         "passesInWindow": [_action_record(r, "impl") for r in rows_in_window],
+        "inFlightNow": [_action_record(r, "impl") for r in (in_flight_rows or [])],
         "lateStarts": [
             _action_record(r, "impl") for r in rows_r1 if r.get("_late_start")
         ],

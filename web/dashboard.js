@@ -258,7 +258,7 @@
     var tickets = group && group.raw ? group.raw.tickets : null;
     if (!tickets || typeof tickets !== 'object') return null;
     var set = {};
-    ['passesInWindow', 'lateStarts', 'ratificationsSoon', 'ratificationsExpired']
+    ['passesInWindow', 'lateStarts', 'ratificationsSoon', 'ratificationsExpired', 'inFlightNow']
       .forEach(function (scope) {
         var list = tickets[scope];
         if (!Array.isArray(list)) return;
@@ -305,6 +305,7 @@
 
     var actions = {
       passesInWindow: ACTIONS && Array.isArray(ACTIONS.passesInWindow) ? ACTIONS.passesInWindow : [],
+      inFlightNow: ACTIONS && Array.isArray(ACTIONS.inFlightNow) ? ACTIONS.inFlightNow : [],
       lateStarts: ACTIONS && Array.isArray(ACTIONS.lateStarts) ? ACTIONS.lateStarts : [],
       ratificationsSoon: ACTIONS && Array.isArray(ACTIONS.ratificationsSoon) ? ACTIONS.ratificationsSoon : [],
       ratificationsExpired: ACTIONS && Array.isArray(ACTIONS.ratificationsExpired) ? ACTIONS.ratificationsExpired : [],
@@ -313,6 +314,7 @@
       if (_activeTickets) {
         actions = {
           passesInWindow: _filterActionList(actions.passesInWindow),
+          inFlightNow: _filterActionList(actions.inFlightNow),
           lateStarts: _filterActionList(actions.lateStarts),
           ratificationsSoon: _filterActionList(actions.ratificationsSoon),
           ratificationsExpired: _filterActionList(actions.ratificationsExpired),
@@ -348,7 +350,8 @@
 
     // The action payload is already filtered to the active group by
     // _groupView(), so this total can never count another pool's passes.
-    set('kpi-total', view.actions.passesInWindow.length);
+    // T5: the headline total is EN VUELO (en curso ahora), not in-window.
+    set('kpi-total', view.actions.inFlightNow.length);
     set('kpi-atrasados', kpis.lateStarts);
     set('kpi-coordinados', kpis.ratificationsSoon);
     set('kpi-en-curso', kpis.ratificationsExpired);
@@ -358,7 +361,7 @@
 
   function _applyKPILabels() {
     var labels = {
-      'total': 'Pases en ventana',
+      'total': 'Pases en vuelo',
       'atrasados': 'Pases atrasados',
       'coordinados': 'Ratificaciones por vencer',
       'en-curso': 'Ratificaciones vencidas',
@@ -406,7 +409,7 @@
   function _onKPIClick(key, view) {
     var A = view.actions;
     if (key === 'total') {
-      _scrollAndHighlightTimeline();                       // Pases en ventana
+      openActionDrawer('Pases en vuelo', A.inFlightNow, 'inFlightNow');
     } else if (key === 'atrasados') {
       openActionDrawer('Pases atrasados', A.lateStarts, 'lateStarts');
     } else if (key === 'coordinados') {
