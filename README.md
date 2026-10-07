@@ -185,6 +185,8 @@ Three files, written to `workspace/output/`:
 | `diagnostic_report.json` | Processing statistics: row counts, scopes, window, conflicts, terminal-state breakdown. |
 
 `workspace/output/*` is git-ignored except `.gitkeep` — regenerate, don't commit.
+The dashboard header shows both clocks: `Actualización` (run time) and the
+source file stamp (`Fuente: <name> · <mtime>`) so file freshness is visible.
 
 ---
 

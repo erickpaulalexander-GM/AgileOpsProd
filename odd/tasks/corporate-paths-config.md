@@ -57,6 +57,7 @@ Out:
 - [x] T5 — KPI pases en vuelo (route: inline; test-first RED→GREEN)
 - [x] T6 — Indicador pases colgados (route: inline; test-first RED→GREEN)
 - [x] T7 — Lenguaje banco: orden + renombres de tarjetas (route: inline)
+- [x] T8 — Sello de fuente en el header (route: inline; test-first RED→GREEN)
 
 ## Acceptance criteria
 - Con `config.yaml` por defecto, `run.py` y `python/main.py` generan los mismos 3 outputs que hoy en `workspace/output/`.
@@ -90,6 +91,7 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T5 done: definición del cliente = estado `Pase en curso` (sale de la tabla) con `INI<=ahora<=FIN`, sobre el universo operativo (no solo la ventana). Campo aditivo `inFlightNow` (payload global + tickets por grupo + diagnóstico); tarjeta titular + drawer + reporte muestran eso como `Pases en vuelo`; `passesInWindow` intacto para el Timeline. RED `ImportError filter_in_flight` → GREEN `pytest 152 passed` + `ruff` + `node --check` x2. Tests que pineaban 4 scopes actualizados a 5 (cambio deliberado). Smoke pineado 09:55: 45 en ventana vs 2 en vuelo. Docs: DATA_CONTRACT v1.4 + ADR-008. Commit `460b018`.
 - 2026-10-07 T6 done: `staleInFlight` (en curso con FIN pasado) con tarjeta `Pases colgados` + drawer + scopes por grupo + diagnóstico + reporte. RED `ImportError` → GREEN `pytest 162 passed` + `ruff` + `node --check`. Smoke en vivo 17:46: 21 colgados (todos agileops), 0 en vuelo. Docs: DATA_CONTRACT v1.5 + ADR-008. Commit `50892a6`.
 - 2026-10-07 T7 done: orden En curso → Atrasados → Fuera de ventana → Ratis; renombres `Pases en vuelo`→`Pases en curso`, `Pases colgados`→`Pases fuera de ventana` (JS+template+reporte+docs; keys del contrato intactas). `pytest 162 passed` + `ruff` + `node --check`. Regen en vivo 17:51 ok. Commit `6cdda4f`.
+- 2026-10-07 T8 done: header evidencia `Fuente: <archivo> · <mtime>` junto a Actualización vía `window.AgileOpsSource` (payload separado, contrato intacto). RED 2 fail → GREEN `pytest 165 passed` + `ruff` + `node --check`. Regen en vivo 17:57 con sello real 17:11:24. Docs: DATA_CONTRACT v1.6 + README.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 
 ## Next step

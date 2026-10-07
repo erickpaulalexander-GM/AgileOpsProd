@@ -354,6 +354,9 @@ def main(
             # scheduled run; it never reaches the window, the rules or the table.
             "excelFileMtime": file_mtime_iso(resolved_excel),
             "excelFileMtimeSource": "excel_file_mtime",
+            # T8: el header del dash evidencia el archivo fuente (nombre +
+            # mtime) para juzgar frescura. Solo diagnostico, nunca contrato.
+            "excelFileName": Path(resolved_excel).name,
             "environment": environment,
             "configSource": str(cfg.get("_config_path", "defaults")),
             "configKind": str(cfg.get("_source", "defaults")),

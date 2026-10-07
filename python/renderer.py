@@ -183,6 +183,13 @@ def render_dashboard(
     out.mkdir(parents=True, exist_ok=True)
     title = dashboard_title or DASHBOARD_TITLE
 
+    # T8: sello del archivo fuente para el header (frescura). Payload
+    # separado, NO contrato: el contrato sigue sin campo mtime.
+    source = {
+        "file": str(diagnostic.get("excelFileName", "") or ""),
+        "mtime": str(diagnostic.get("excelFileMtime", "") or ""),
+    }
+
     # 1. Write dashboard_data.json
     data_path = out / "dashboard_data.json"
     data_path.write_text(
@@ -201,7 +208,7 @@ def render_dashboard(
 
     # 3. Generate dashboard.html (template + inline data)
     html_path = out / "dashboard.html"
-    _generate_html(contract, actions, html_path, title=title)
+    _generate_html(contract, actions, html_path, title=title, source=source)
     logger.info(f"Written: {html_path}")
 
     return {
@@ -216,6 +223,7 @@ def _generate_html(
     actions: dict[str, Any] | None,
     output_path: Path,
     title: str = DASHBOARD_TITLE,
+    source: dict[str, Any] | None = None,
 ) -> None:
     """
     Generate a self-contained dashboard.html.
@@ -252,6 +260,13 @@ def _generate_html(
             + json.dumps(actions, ensure_ascii=False)
             + ';</script>\n'
         )
+
+    # T8: separate, non-contract source stamp (header frescura).
+    data_script += (
+        '<script>window.AgileOpsSource = '
+        + json.dumps(source or {}, ensure_ascii=False)
+        + ';</script>\n'
+    )
 
     # Replace external resource references with inlined content
     html = template

@@ -112,6 +112,15 @@
 
     // Update text (keep existing format)
     textEl.textContent = 'Actualización: ' + DATA.meta.updatedAt;
+
+    // T8: source stamp — evidencia el archivo fuente para juzgar frescura.
+    // Archivos viejos no traen window.AgileOpsSource: se deja el placeholder.
+    var sourceEl = document.getElementById('source-stamp');
+    var src = (typeof window !== 'undefined') ? window.AgileOpsSource : null;
+    if (sourceEl && src && src.file) {
+      sourceEl.textContent = 'Fuente: ' + src.file +
+        (src.mtime ? ' · ' + src.mtime : '');
+    }
   }
 
   /* =========================================================
