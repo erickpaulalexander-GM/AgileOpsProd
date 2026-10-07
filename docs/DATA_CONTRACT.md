@@ -150,7 +150,7 @@ Current groups, all three emitted unconditionally:
 |-------|------|-------------|
 | `passesInWindow` | array of string | Tickets with a row in the 8h window, for this group. |
 | `inFlightNow` | array of string | Tickets `Pase en curso` with `INI_IMPL <= updatedAt <= FIN_IMPL`, for this group. The headline KPI card reads this scope, not the window. |
-| `staleInFlight` | array of string | Tickets `Pase en curso` with `FIN_IMPL < updatedAt`, for this group. Invisible everywhere else (timeline/table/drawers) — they get their own `Pases colgados` card + drawer. |
+| `staleInFlight` | array of string | Tickets `Pase en curso` with `FIN_IMPL < updatedAt`, for this group. Invisible everywhere else (timeline/table/drawers) — they get their own `Pases fuera de ventana` card + drawer. |
 | `lateStarts` | array of string | Tickets whose `_late_start` flag is set, for this group. |
 | `ratificationsSoon` | array of string | Tickets whose `_ratification_soon` flag is set. |
 | `ratificationsExpired` | array of string | Tickets whose `_ratification_expired` flag is set. |
@@ -462,8 +462,8 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
-| v1.5 | 2026-10-07 | **Colgados scope** (banco: ceguera inaceptable). `window.ChangeOpsActions` y `tickets` por grupo ganan `staleInFlight`: pases `Pase en curso` con `FIN_IMPL` ya pasado, invisibles en timeline/tabla/drawers. Nueva tarjeta `Pases colgados` + drawer propio. |
-| v1.4 | 2026-10-07 | **En-vuelo scope** (pedido del cliente). `window.ChangeOpsActions` y `tickets` por grupo ganan `inFlightNow`: pases `Pase en curso` cubriendo `updatedAt`, calculados sobre el universo operativo (no solo la ventana). La tarjeta titular muestra este scope con etiqueta `Pases en vuelo` y abre su Drawer; `passesInWindow` se mantiene para el Timeline. |
+| v1.5 | 2026-10-07 | **Colgados scope** (banco: ceguera inaceptable). `window.ChangeOpsActions` y `tickets` por grupo ganan `staleInFlight`: pases `Pase en curso` con `FIN_IMPL` ya pasado, invisibles en timeline/tabla/drawers. Nueva tarjeta `Pases fuera de ventana` + drawer propio. |
+| v1.4 | 2026-10-07 | **En-vuelo scope** (pedido del cliente). `window.ChangeOpsActions` y `tickets` por grupo ganan `inFlightNow`: pases `Pase en curso` cubriendo `updatedAt`, calculados sobre el universo operativo (no solo la ventana). La tarjeta titular muestra este scope con etiqueta `Pases en curso` y abre su Drawer; `passesInWindow` se mantiene para el Timeline. |
 | v1.3 | 2026-10-06 | **Run-clock anchor** (ADR-012, supersedes ADR-005's anchor). `meta.updatedAt` is now the system clock at run time (or the `--now` override), not the Excel mtime. The Excel mtime is kept in `diagnostic_report.json` only (`excelFileMtime`). No shape change — only the provenance and values of `updatedAt` / `windowStart` / `windowEnd`. |
 | v1.2 | 2026-10-05 | **Pool visibility groups** (ADR-011). `meta.visibilityGroups[]` added, each entry carrying `kpis` and `tickets` (ticket-ID sets per action scope) so the web layer can scope the timeline, table, KPI cards and action drawers without hardcoding anything. `meta.kpis` and `window.ChangeOpsActions` stay global. Presentation filter only — all groups remain embedded in the same file. |
 | v1.1 | 2026-10-05 | **AgileOps Prod scope.** `pool` enum replaced with the four AgileOps Prod families; `meta.poolOrder` added (ADR-009); cell width corrected from 80 px to the real 96 px; `type` axis separated from pool identity; conflict rule restated precisely. |

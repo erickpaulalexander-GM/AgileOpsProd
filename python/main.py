@@ -281,12 +281,12 @@ def main(
     # universo operativo completo (NO solo la ventana: un pase iniciado
     # antes de la ventana sigue volando). Es el KPI "Pases en vuelo".
     rows_in_flight = filter_in_flight(rows_all, anchor_dt)
-    logger.info("In-flight now (Pases en vuelo): %d", len(rows_in_flight))
+    logger.info("In-flight now (Pases en curso): %d", len(rows_in_flight))
 
     # T6: Colgados = en curso con FIN pasado. Invisibles en timeline, tabla
     # y drawers (salvo rati vencida de casualidad): indicador propio.
     rows_stale = filter_stale_in_flight(rows_all, anchor_dt)
-    logger.info("Stale in-flight (Pases colgados): %d", len(rows_stale))
+    logger.info("Stale in-flight (Fuera de ventana): %d", len(rows_stale))
 
     # Step 5: Convert to Data Contract v1.
     #   - Timeline scope: in-window rows.
@@ -516,8 +516,8 @@ def _print_report(
     if ap:
         print("  ACTION PAYLOAD — window.ChangeOpsActions (ADR-008)")
         print(f"    Pases en ventana                    : {ap.get('passesInWindow', 0)}")
-        print(f"    Pases en vuelo (en curso ahora)      : {ap.get('inFlightNow', 0)}")
-        print(f"    Pases colgados (en curso, FIN pasado): {ap.get('staleInFlight', 0)}")
+        print(f"    Pases en curso (volando ahora)       : {ap.get('inFlightNow', 0)}")
+        print(f"    Pases fuera de ventana (FIN pasado)  : {ap.get('staleInFlight', 0)}")
         print(f"    Pases atrasados                     : {ap.get('lateStarts', 0)}")
         print(f"    Ratificaciones por vencer           : {ap.get('ratificationsSoon', 0)}")
         print(f"    Ratificaciones vencidas             : {ap.get('ratificationsExpired', 0)}")
@@ -537,8 +537,8 @@ def _print_report(
             print(f"    {group['id']:<10} {group['label']:<10} "
                   f"familias={', '.join(group['families'])}  "
                   f"pases_en_ventana={len(tickets.get('passesInWindow', []))}  "
-                  f"en_vuelo={len(tickets.get('inFlightNow', []))}  "
-                  f"colgados={len(tickets.get('staleInFlight', []))}  "
+                  f"en_curso={len(tickets.get('inFlightNow', []))}  "
+                  f"fuera_ventana={len(tickets.get('staleInFlight', []))}  "
                   f"atrasados={kpis.get('lateStarts', 0)}  "
                   f"rati_por_vencer={kpis.get('ratificationsSoon', 0)}  "
                   f"rati_vencidas={kpis.get('ratificationsExpired', 0)}")

@@ -364,8 +364,8 @@
 
   function _applyKPILabels() {
     var labels = {
-      'total': 'Pases en vuelo',
-      'colgados': 'Pases colgados',
+      'total': 'Pases en curso',
+      'colgados': 'Pases fuera de ventana',
       'atrasados': 'Pases atrasados',
       'coordinados': 'Ratificaciones por vencer',
       'en-curso': 'Ratificaciones vencidas',
@@ -380,7 +380,7 @@
       }
     });
     // Reorder cards to the v1.1 action-model order
-    ['total', 'colgados', 'atrasados', 'coordinados', 'en-curso'].forEach(function (key) {
+    ['total', 'atrasados', 'colgados', 'coordinados', 'en-curso'].forEach(function (key) {
       var card = section.querySelector('.kpi-card[data-kpi="' + key + '"]');
       if (card) section.appendChild(card);
     });
@@ -413,9 +413,9 @@
   function _onKPIClick(key, view) {
     var A = view.actions;
     if (key === 'total') {
-      openActionDrawer('Pases en vuelo', A.inFlightNow, 'inFlightNow');
+      openActionDrawer('Pases en curso', A.inFlightNow, 'inFlightNow');
     } else if (key === 'colgados') {
-      openActionDrawer('Pases colgados', A.staleInFlight, 'staleInFlight');
+      openActionDrawer('Pases fuera de ventana', A.staleInFlight, 'staleInFlight');
     } else if (key === 'atrasados') {
       openActionDrawer('Pases atrasados', A.lateStarts, 'lateStarts');
     } else if (key === 'coordinados') {
