@@ -29,9 +29,13 @@ from column_map import (
 logger = logging.getLogger(__name__)
 
 
-def read_excel(path: str | Path) -> dict[str, Any]:
+def read_excel(path: str | Path, sheet: int | str = 0) -> dict[str, Any]:
     """
     Read Excel file and return normalized data.
+
+    Args:
+        path: workbook path.
+        sheet: sheet name or index (default 0 = first sheet, config excel.sheet).
 
     Returns:
         dict with keys:
@@ -39,9 +43,9 @@ def read_excel(path: str | Path) -> dict[str, Any]:
             - diagnostic: dict with read statistics
     """
     path = Path(path)
-    logger.info(f"Reading Excel: {path}")
+    logger.info(f"Reading Excel: {path} (sheet={sheet!r})")
 
-    df = pd.read_excel(path, dtype=str)  # Read all as str to control parsing
+    df = pd.read_excel(path, sheet_name=sheet, dtype=str)  # all str, parseado propio
     df = df.fillna("")
 
     # Map columns

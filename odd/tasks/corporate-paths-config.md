@@ -46,7 +46,7 @@ Out:
 
 ## Tasks
 - [x] T1 — Loader + config.yaml + dep + tests (route: inline; trigger evidence: <3 archivos no triviales en este slice, batches acotados; delegación intentada y caída)
-- [ ] T2 — Wire pipeline a config (main/renderer/excel_reader: input resolve, sheet, output_dir, timezone wall-clock, env en diagnóstico; compat intacta) (route: inline)
+- [x] T2 — Wire pipeline a config (main/renderer/excel_reader: input resolve, sheet, output_dir, timezone wall-clock, env en diagnóstico; compat intacta) (route: inline)
 - [ ] T3 — Ejecutor raíz `run.py` + docs Scheduler + verificación total (route: inline)
 
 ## Acceptance criteria
@@ -74,7 +74,8 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 
 ## Progress
 - 2026-10-07: rama `feature/corporate-paths-config` creada desde `main`. Doc creado, 3 tareas. Sin writes de fuente aún.
-- 2026-10-07 T1 done: RED `ModuleNotFoundError: No module named 'config'` → GREEN `tests/test_config.py 4 passed` + `ruff check` limpio. Commit work-unit pendiente de hash.
+- 2026-10-07 T1 done: RED `ModuleNotFoundError: No module named 'config'` → GREEN `tests/test_config.py 4 passed` + `ruff check` limpio. Commit `586e234`.
+- 2026-10-07 T2 done: wiring con compat (renderer.OUTPUT_DIR parcheable, seam _now honrado). `pytest 141 passed` + `ruff` limpio. Commit work-unit pendiente de hash.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 
 ## Next step

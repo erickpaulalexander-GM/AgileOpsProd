@@ -31,9 +31,17 @@ from pathlib import Path
 from typing import Any
 
 from adapter import compute_window, filter_to_window, to_contract
+from config import (
+    get_sheet,
+    load_config,
+    resolve_input_file,
+    resolve_output_dir,
+    wall_now,
+)
+import renderer as renderer_mod
 from excel_reader import read_excel
-from kpi import update_contract_kpis, update_contract_visibility_kpis
 from renderer import build_actions, render_dashboard
+from kpi import update_contract_kpis, update_contract_visibility_kpis
 from rules import apply_rules, collect_conflicts, filter_operational, is_terminal
 
 # Repository root — this module lives in <root>/python/. Resolving the default
@@ -80,14 +88,31 @@ def _now() -> datetime:
     return datetime.now()
 
 
-def _resolve_reference_now(reference_now: datetime | None) -> datetime:
+def _resolve_reference_now(
+    reference_now: datetime | None, timezone: str | None = None
+) -> datetime:
     """The SINGLE temporal reference of a run.
 
-    Returns the explicit override when one was supplied, otherwise the real
-    system clock. Every downstream consumer (window, rules, table filter,
+    Returns the explicit override when one was supplied, otherwise the
+    wall-clock in the configured timezone (default America/Lima, naive).
+    Every downstream consumer (window, rules, table filter,
     meta.updatedAt) flows from this one value.
     """
-    return reference_now if reference_now is not None else _now()
+    if reference_now is not None:
+        return reference_now
+    if timezone:
+        base = _now()
+        lima = wall_now(timezone)
+        # Compat con el seam de tests (monkeypatch de _now): si el reloj fue
+        # fijado a un valor lejos del presente real, se honra tal cual.
+        try:
+            far = abs((base - datetime.now()).total_seconds()) > 300
+        except TypeError:
+            far = False
+        if far:
+            return base
+        return lima
+    return _now()
 
 
 # Accepted ``--now`` formats, most specific first. The bare "%H:%M" form is
@@ -129,7 +154,7 @@ def _parse_now(value: str) -> datetime:
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    """CLI: ``main.py [excel_path] [--now DATETIME]``."""
+    """CLI: ``main.py [excel_path] [--now DATETIME] [--config PATH]``."""
     parser = argparse.ArgumentParser(
         prog="main.py",
         description="Generate the AgileOps Prod dashboard from an Excel workbook.",
@@ -137,11 +162,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "excel_path",
         nargs="?",
-        default=str(DEFAULT_EXCEL_PATH),
+        default=None,
         help=(
             "Path to the Excel workbook "
-            "(default: workspace/input/ControlPases.xlsx)."
+            "(default: config paths.input_dir + excel.pattern)."
         ),
+    )
+    parser.add_argument(
+        "--config",
+        dest="config_path",
+        default=None,
+        metavar="PATH",
+        help="Path to config.yaml (default: <repo>/config.yaml).",
     )
     parser.add_argument(
         "--now",
@@ -165,13 +197,19 @@ def cli(argv: list[str] | None = None) -> int:
     Scheduler uses.
     """
     args = _build_arg_parser().parse_args(argv)
-    main(args.excel_path, reference_now=args.reference_now)
+    main(
+        args.excel_path,
+        reference_now=args.reference_now,
+        config_path=args.config_path,
+    )
     return 0
 
 
 def main(
-    excel_path: str | Path = DEFAULT_EXCEL_PATH,
+    excel_path: str | Path | None = None,
     reference_now: datetime | None = None,
+    config_path: str | Path | None = None,
+    cfg: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     """
     Run the complete AgileOps Prod pipeline.
@@ -185,10 +223,35 @@ def main(
     Returns:
         dict with output file paths
     """
-    logger.info("Starting AgileOps Prod pipeline for: %s", excel_path)
+    if cfg is None:
+        cfg = load_config(config_path)
+    resolved_excel = resolve_input_file(cfg, explicit=excel_path)
+    sheet = get_sheet(cfg)
+    cfg_output = resolve_output_dir(cfg)
+    # Compat: los tests parchean renderer.OUTPUT_DIR al tmp dir. Si el yaml
+    # no personaliza el output, manda el modulo (parcheado o default).
+    default_out = (renderer_mod.REPO_ROOT / "workspace" / "output").resolve()
+    try:
+        cfg_is_default_out = cfg_output.resolve() == default_out
+    except OSError:
+        cfg_is_default_out = False
+    if cfg_is_default_out or cfg.get("_source") != "file":
+        output_dir = Path(renderer_mod.OUTPUT_DIR)
+    else:
+        output_dir = cfg_output
+    app_name = str(cfg.get("app", {}).get("name", "AgileOps Prod Console"))
+    timezone = str(cfg.get("app", {}).get("timezone", "America/Lima"))
+    environment = str(cfg.get("environment", "DEV"))
+    logger.info(
+        "Starting %s pipeline for: %s (env=%s, config=%s)",
+        app_name,
+        resolved_excel,
+        environment,
+        cfg.get("_config_path", "defaults"),
+    )
 
     # Step 1: Read Excel (already filtered to the in-scope pools)
-    data = read_excel(excel_path)
+    data = read_excel(resolved_excel, sheet=sheet)
     rows_all = data["rows"]          # FULL in-scope set (KPI scope)
     diagnostic = data["diagnostic"]
     logger.info("Read %d in-scope rows (KPI scope)", len(rows_all))
@@ -198,7 +261,7 @@ def main(
     # rules' reference_now, the table's live-work filter and meta.updatedAt —
     # flows from this one value. The Excel mtime is NOT a reference; it is
     # reported separately in the diagnostic so a stale file can be spotted.
-    anchor_dt = _resolve_reference_now(reference_now)
+    anchor_dt = _resolve_reference_now(reference_now, timezone=timezone)
     updated_at_display = anchor_dt.strftime("%Y-%m-%dT%H:%M:%S")
     logger.info("Run reference (meta.updatedAt): %s", updated_at_display)
 
@@ -267,8 +330,14 @@ def main(
             ),
             # Excel mtime — DIAGNOSTIC ONLY. Useful to spot a stale file in a
             # scheduled run; it never reaches the window, the rules or the table.
-            "excelFileMtime": file_mtime_iso(excel_path),
+            "excelFileMtime": file_mtime_iso(resolved_excel),
             "excelFileMtimeSource": "excel_file_mtime",
+            "environment": environment,
+            "configSource": str(cfg.get("_config_path", "defaults")),
+            "configKind": str(cfg.get("_source", "defaults")),
+            "timezone": timezone,
+            "excelSheet": sheet,
+            "excelPattern": str(cfg.get("excel", {}).get("pattern", "")),
             "timelineScope": {
                 "description": "Bars whose impl start is inside the dynamic 8h window",
                 "barsInWindow": len(rows_timeline),
@@ -331,7 +400,13 @@ def main(
     )
 
     # Step 8: Generate output files
-    output_paths = render_dashboard(contract, diagnostic, actions)
+    output_paths = render_dashboard(
+        contract,
+        diagnostic,
+        actions,
+        output_dir=output_dir,
+        dashboard_title=app_name,
+    )
 
     _print_report(contract, diagnostic, output_paths)
 

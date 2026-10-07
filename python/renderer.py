@@ -100,6 +100,8 @@ def render_dashboard(
     contract: dict[str, Any],
     diagnostic: dict[str, Any],
     actions: dict[str, Any] | None = None,
+    output_dir: str | Path | None = None,
+    dashboard_title: str | None = None,
 ) -> dict[str, Path]:
     """
     Generate all output files.
@@ -108,14 +110,18 @@ def render_dashboard(
         contract: Data Contract v1
         diagnostic: Processing statistics
         actions: Optional window.ChangeOpsActions payload (ADR-008)
+        output_dir: Override for OUTPUT_DIR (config paths.output_dir)
+        dashboard_title: Override for DASHBOARD_TITLE (config app.name)
 
     Returns:
         dict with output file paths
     """
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = Path(output_dir) if output_dir is not None else OUTPUT_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    title = dashboard_title or DASHBOARD_TITLE
 
     # 1. Write dashboard_data.json
-    data_path = OUTPUT_DIR / "dashboard_data.json"
+    data_path = out / "dashboard_data.json"
     data_path.write_text(
         json.dumps(contract, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -123,7 +129,7 @@ def render_dashboard(
     logger.info(f"Written: {data_path}")
 
     # 2. Write diagnostic_report.json
-    diag_path = OUTPUT_DIR / "diagnostic_report.json"
+    diag_path = out / "diagnostic_report.json"
     diag_path.write_text(
         json.dumps(diagnostic, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -131,8 +137,8 @@ def render_dashboard(
     logger.info(f"Written: {diag_path}")
 
     # 3. Generate dashboard.html (template + inline data)
-    html_path = OUTPUT_DIR / "dashboard.html"
-    _generate_html(contract, actions, html_path)
+    html_path = out / "dashboard.html"
+    _generate_html(contract, actions, html_path, title=title)
     logger.info(f"Written: {html_path}")
 
     return {
@@ -146,6 +152,7 @@ def _generate_html(
     contract: dict[str, Any],
     actions: dict[str, Any] | None,
     output_path: Path,
+    title: str = DASHBOARD_TITLE,
 ) -> None:
     """
     Generate a self-contained dashboard.html.
@@ -213,7 +220,7 @@ def _generate_html(
     # Update title
     html = html.replace(
         TEMPLATE_TITLE_TAG,
-        f'<title>{DASHBOARD_TITLE} — {contract["meta"]["updatedAt"]}</title>',
+        f'<title>{title} — {contract["meta"]["updatedAt"]}</title>',
     )
     if TEMPLATE_TITLE_TAG in html:
         logger.warning(
