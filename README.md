@@ -71,6 +71,37 @@ Task Scheduler on the client machine, where the "Start in" folder is not the
 repo. This is ADR-010; how to prove it is in
 [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md).
 
+On the corporate PC you don't edit code to move paths — you edit
+`config.yaml` in the repo root (created for this feature):
+
+```yaml
+environment: DEV
+paths:
+  input_dir: workspace/input     # relative = repo root; absolute also works
+  output_dir: workspace/output
+excel:
+  pattern: "ControlPases*.xlsx"  # newest match inside input_dir wins
+  sheet: 0                       # name or index; 0 = first sheet
+app:
+  name: "AgileOps Prod Console"
+  timezone: "America/Lima"        # wall-clock; --now still wins for replays
+```
+
+Precedence: CLI `excel_path` > config > built-in defaults. Missing
+`config.yaml` warns and falls back to defaults, so old Scheduler tasks keep
+working. Extra diagnostic keys (`environment`, `configSource`, `timezone`,
+`excelSheet`, `excelPattern`) land in `diagnostic_report.json` only — the
+Data Contract shape is untouched.
+
+The root executor `run.py` is what Scheduler points at (thin wrapper over
+`python/main.py`, same CLI: `[excel_path] [--now DATETIME] [--config PATH]`):
+
+```powershell
+.\.venv-win\Scripts\python.exe run.py
+.\.venv-win\Scripts\python.exe run.py --now "2026-10-06 09:55"
+.\.venv-win\Scripts\python.exe run.py --config "D:\corp\config.yaml"
+```
+
 ### The timeline window is anchored to the run clock (ADR-012)
 
 The 8-hour timeline window starts at the **floor of the clock when the pipeline
@@ -106,7 +137,7 @@ there). Create a daily task with `schtasks` from an elevated prompt — quote th
 whole `/TR` value and use the venv's Python directly:
 
 ```cmd
-schtasks /Create /TN "AgileOps Prod Console" /SC DAILY /ST 09:55 /TR "\"D:\IA_DEV\AgileOpsProd\.venv-win\Scripts\python.exe\" \"D:\IA_DEV\AgileOpsProd\python\main.py\""
+schtasks /Create /TN "AgileOps Prod Console" /SC DAILY /ST 09:55 /TR "\"D:\IA_DEV\AgileOpsProd\.venv-win\Scripts\python.exe\" \"D:\IA_DEV\AgileOpsProd\run.py\""
 ```
 
 - `/ST 09:55` is when the task runs; if it runs at 09:55, the window starts at

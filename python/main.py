@@ -228,14 +228,14 @@ def main(
     resolved_excel = resolve_input_file(cfg, explicit=excel_path)
     sheet = get_sheet(cfg)
     cfg_output = resolve_output_dir(cfg)
-    # Compat: los tests parchean renderer.OUTPUT_DIR al tmp dir. Si el yaml
-    # no personaliza el output, manda el modulo (parcheado o default).
+    # Compat: los tests parchean renderer.OUTPUT_DIR al tmp dir. Si el modulo
+    # fue parcheado (difiere del default), manda el modulo; si no, manda cfg.
     default_out = (renderer_mod.REPO_ROOT / "workspace" / "output").resolve()
     try:
-        cfg_is_default_out = cfg_output.resolve() == default_out
+        use_module_out = Path(renderer_mod.OUTPUT_DIR).resolve() != default_out
     except OSError:
-        cfg_is_default_out = False
-    if cfg_is_default_out or cfg.get("_source") != "file":
+        use_module_out = False
+    if use_module_out:
         output_dir = Path(renderer_mod.OUTPUT_DIR)
     else:
         output_dir = cfg_output
