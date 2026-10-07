@@ -94,11 +94,11 @@
   // T9: minutos desde el mtime del Excel para marcar fuente desactualizada.
   var SOURCE_STALE_MIN = 30;
 
-  // T9: "2026-10-07T17:11:24" -> "07/10/2026 17:11" (criollo, como drawers).
-  function _formatStamp(iso) {
-    var m = /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(String(iso));
-    if (!m) return String(iso);
-    return m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+  // T9b: "hace N min" — más corto y más fácil que leer fechas en el topbar.
+  function _haceMin(min) {
+    var n = Math.max(0, Math.round(min));
+    if (n < 1) return 'recién';
+    return 'hace ' + n + ' min';
   }
   function updateSyncIndicator() {
     var indicatorEl = document.getElementById('sync-indicator');
@@ -120,10 +120,11 @@
     }
 
     // Update text (keep existing format)
-    textEl.textContent = 'Actualización: ' + DATA.meta.updatedAt;
+    textEl.textContent = 'Actualización: ' + _haceMin(diffMin);
+    textEl.title = DATA.meta.updatedAt;
 
     // T8/T9: source stamp — evidencia el archivo fuente para juzgar frescura.
-    // Fecha legible + alerta roja con icono si supera SOURCE_STALE_MIN.
+    // Relativo ("hace N min"); la fecha exacta queda en el tooltip.
     // Archivos viejos no traen window.AgileOpsSource: se deja el placeholder.
     var sourceEl = document.getElementById('source-stamp');
     var src = (typeof window !== 'undefined') ? window.AgileOpsSource : null;
@@ -131,20 +132,21 @@
       var stamp = 'Fuente: ' + src.file;
       var ageMin = -1;
       if (src.mtime) {
-        stamp += ' · ' + _formatStamp(src.mtime);
         var mt = new Date(src.mtime).getTime();
-        if (!isNaN(mt)) ageMin = Math.max(0, Math.round((Date.now() - mt) / 60000));
+        if (!isNaN(mt)) {
+          ageMin = Math.max(0, Math.round((Date.now() - mt) / 60000));
+          stamp += ' · ' + _haceMin(ageMin);
+          sourceEl.title = 'Archivo del ' + src.mtime;
+        }
       }
+      sourceEl.textContent = stamp;
       if (ageMin >= SOURCE_STALE_MIN) {
-        sourceEl.textContent = stamp + ' · hace ' + ageMin + ' min';
         sourceEl.classList.add('source-stamp--stale');
-        sourceEl.title = 'Fuente desactualizada: el archivo tiene más de ' +
-          SOURCE_STALE_MIN + ' min';
+        sourceEl.title = 'Fuente desactualizada (más de ' +
+          SOURCE_STALE_MIN + ' min): ' + src.mtime;
         var iconWrap = document.createElement('span');
         iconWrap.innerHTML = '<svg class="sync-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
         sourceEl.insertBefore(iconWrap.firstChild, sourceEl.firstChild);
-      } else {
-        sourceEl.textContent = stamp;
       }
     }
   }

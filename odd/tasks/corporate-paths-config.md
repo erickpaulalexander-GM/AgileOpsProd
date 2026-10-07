@@ -59,6 +59,7 @@ Out:
 - [x] T7 — Lenguaje banco: orden + renombres de tarjetas (route: inline)
 - [x] T8 — Sello de fuente en el header (route: inline; test-first RED→GREEN)
 - [x] T9 — Alerta fuente >30min + formato legible (route: inline; JS solo-front)
+- [x] T9b — Header todo relativo (`hace N min`, fecha exacta en tooltip)
 
 ## Acceptance criteria
 - Con `config.yaml` por defecto, `run.py` y `python/main.py` generan los mismos 3 outputs que hoy en `workspace/output/`.

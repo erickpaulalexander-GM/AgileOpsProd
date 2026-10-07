@@ -186,7 +186,7 @@ Three files, written to `workspace/output/`:
 
 `workspace/output/*` is git-ignored except `.gitkeep` — regenerate, don't commit.
 The dashboard header shows both clocks: `Actualización` (run time) and the
-source file stamp (`Fuente: <name> · <mtime>`) so file freshness is visible.
+source file stamp (`Fuente: <name> · hace N min`) so file freshness is visible.
 
 ---
 
