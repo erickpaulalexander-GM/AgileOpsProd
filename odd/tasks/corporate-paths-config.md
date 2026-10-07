@@ -48,6 +48,7 @@ Out:
 - [x] T1 — Loader + config.yaml + dep + tests (route: inline; trigger evidence: <3 archivos no triviales en este slice, batches acotados; delegación intentada y caída)
 - [x] T2 — Wire pipeline a config (main/renderer/excel_reader: input resolve, sheet, output_dir, timezone wall-clock, env en diagnóstico; compat intacta) (route: inline)
 - [x] T3 — Ejecutor raíz `run.py` + docs Scheduler + verificación total (route: inline)
+- [x] T4 — `run.py` auto-bootstrap al venv (route: inline; un archivo mecánico)
 
 ## Acceptance criteria
 - Con `config.yaml` por defecto, `run.py` y `python/main.py` generan los mismos 3 outputs que hoy en `workspace/output/`.
@@ -77,6 +78,7 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T1 done: RED `ModuleNotFoundError: No module named 'config'` → GREEN `tests/test_config.py 4 passed` + `ruff check` limpio. Commit `586e234`.
 - 2026-10-07 T2 done: wiring con compat (renderer.OUTPUT_DIR parcheable, seam _now honrado). `pytest 141 passed` + `ruff` limpio. Commit `85c4461`.
 - 2026-10-07 T3 done: `run.py` raíz + README (config + Scheduler a run.py) + fix output custom por cfg. Static: ruff ok, `pytest 141 passed`, `node --check` x2 ok. Smoke `run.py --now "2026-10-06 09:55"`: exit 0, 1432 leídas/571 en scope, 3 archivos frescos, poolOrder 4 + 3 groups, diag env=DEV cfg=file tz=America/Lima. Custom output_dir a tmp: 3 archivos EXISTS True. Commit `fa855f8`.
+- 2026-10-07 T4 done: `run.py` re-ejecuta con `.venv-win` si al intérprete le falta pandas (`py run.py` directo). Detalle: `os.execv` en Windows parte args con espacios (reproducido aislado) → se usa `subprocess.call` con exit code propagado. `ruff` limpio + `py run.py --now '2026-10-06 09:55'` end-to-end ok.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 
 ## Next step
