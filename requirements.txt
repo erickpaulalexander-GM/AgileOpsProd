@@ -2,3 +2,4 @@
 # Install: python -m pip install -r requirements.txt
 pandas==3.0.5
 openpyxl==3.1.5
+pyyaml==6.0.3
