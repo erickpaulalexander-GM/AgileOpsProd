@@ -235,12 +235,12 @@ def get_pool_name(recurso: Any) -> str:
 # does not already accept.
 
 # (group id, display label, pool families in this group)
+# T11 (pedido del cliente): todo ORO tiene filtro propio; Prod queda aparte.
 _VISIBILITY_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("yape", "YAPE", ("Yape",)),
     ("sf", "S&F", ("S&F",)),
-    # One group over three existing families — expressed as family names so the
-    # definition cannot drift from the pool table above.
-    ("agileops", "AgileOps", ("AgileOps ORO", "AgileOps ORO Derivado", "AgileOps Prod")),
+    ("oro", "AgileOps ORO", ("AgileOps ORO", "AgileOps ORO Derivado")),
+    ("prod", "AgileOps Prod", ("AgileOps Prod",)),
 )
 
 

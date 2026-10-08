@@ -66,6 +66,7 @@ Out:
 - [x] T9 — Alerta fuente >30min + formato legible (route: inline; JS solo-front)
 - [x] T9b — Header todo relativo (`hace N min`, fecha exacta en tooltip)
 - [x] T10 — Split ORO / ORO-Derivado en pools separados (route: inline; test-first RED→GREEN)
+- [x] T11 — Cuarto filtro: grupo ORO propio + Prod aparte (route: inline; test-first RED→GREEN)
 
 ## Acceptance criteria
 - Con `config.yaml` por defecto, `run.py` y `python/main.py` generan los mismos 3 outputs que hoy en `workspace/output/`.
@@ -102,6 +103,7 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T8 done: header evidencia `Fuente: <archivo> · <mtime>` junto a Actualización vía `window.AgileOpsSource` (payload separado, contrato intacto). RED 2 fail → GREEN `pytest 165 passed` + `ruff` + `node --check`. Regen en vivo 17:57 con sello real 17:11:24. Docs: DATA_CONTRACT v1.6 + README. Commit `a842750`.
 - 2026-10-07 T9 done: `Fuente: <arch> · DD/MM/YYYY HH:MM` + icono rojo y `hace N min` si supera 30 min (`SOURCE_STALE_MIN`, tooltip). Sin tests python (lógica solo-front); `node --check` ok + regen en vivo. Commit `f4bd8a1`.
 - 2026-10-07 T10 done: `AgileOps ORO Derivado` familia propia (excepción parcial ADR-009 → ADR-013, solo ORO). Tabla + token largo-antes + grupo agileops + set CSS completo + docs (README, DATA_CONTRACT v1.7, ADR-013, timeline.md). RED 9 fail → GREEN `pytest 165 passed` + `ruff` + `node --check` x2. Smoke vivo 19:32: 5 filas, poolOrder 5, grupo agileops 3 familias. Commit `16f5172`.
+- 2026-10-07 T11 done: grupos 3→4 (`oro` ORO+Derivado, `prod` Prod; `agileops` muere, localStorage viejo cae a `yape`). Badge CSS por id + docs (README, DATA_CONTRACT v1.8, ADR-011/013). RED 11 fail (motor viejo) → GREEN `pytest 165 passed` + `ruff` + `node --check`. Smoke vivo 19:41: 4 grupos con conteos propios.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 
 ## Next step

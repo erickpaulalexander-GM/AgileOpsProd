@@ -142,7 +142,8 @@ Current groups, all three emitted unconditionally:
 |---|------|---------|------------|---------|
 | 1 | `yape` | `YAPE` | `Yape` | **yes** |
 | 2 | `sf` | `S&F` | `S&F` | no |
-| 3 | `agileops` | `AgileOps` | `AgileOps ORO`, `AgileOps ORO Derivado`, `AgileOps Prod` | no |
+| 3 | `oro` | `AgileOps ORO` | `AgileOps ORO`, `AgileOps ORO Derivado` | no |
+| 4 | `prod` | `AgileOps Prod` | `AgileOps Prod` | no |
 
 ##### `meta.visibilityGroups[].tickets`
 
@@ -182,7 +183,7 @@ tickets.
 
 ##### Limitation — read before relying on this
 
-> All three groups' rows and records are embedded in the **same**
+> All four groups' rows and records are embedded in the **same**
 > `dashboard.html` / `dashboard_data.json`. Anyone can read every group's data
 > from the file or from devtools, including the groups not selected. The
 > `localStorage` key is a convenience, not a guard. Real enforcement needs a
@@ -443,7 +444,9 @@ requires it, but this workbook snapshot contains **zero** rows with that value.
 Measured from the same historical (mtime-anchored) run, by rendering the
 generated `dashboard.html` once per group. Every column here is
 window/reference-dependent, so the values move with the run clock under
-ADR-012; the partition invariant they demonstrate does not:
+ADR-012; the partition invariant they demonstrate does not. The example predates
+the 4th group (T11): its single `agileops` row is today two rows (`oro`: ORO +
+ORO Derivado, `prod`: Prod).
 
 | `id` | Timeline families | Table rows | `tickets.passesInWindow` | `kpis.lateStarts` | `ratificationsSoon` | `ratificationsExpired` |
 |------|-------------------|-----------|---------------------------|----------------------|---------------------|--------------------------|
@@ -464,6 +467,7 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.8 | 2026-10-07 | **Cuarto filtro** (pedido del cliente). Grupos 3 → 4: `oro` (`AgileOps ORO`, ORO + ORO Derivado) y `prod` (`AgileOps Prod`); `agileops` deja de existir (el `localStorage` viejo cae al default `yape` por diseño). |
 | v1.7 | 2026-10-07 | **ORO Derivado split** (ADR-013, partial exception to ADR-009). `pool` enum grows 4 → 5: `AgileOps ORO Derivado` is its own family with token `agileops-oro-derivado`; `meta.poolOrder` carries 5 entries; the `agileops` visibility group owns 3 families. Other `-DERIVADO` variants stay bar type. |
 | v1.6 | 2026-10-07 | **Sello de fuente en el header**. `dashboard.html` incrusta `window.AgileOpsSource` (nombre + mtime del Excel, payload separado NO contrato) y el header lo muestra junto a `Actualización` para juzgar frescura del archivo. El contrato sigue sin campo mtime. T9: relativo (`hace N min`, fecha exacta en tooltip) + alerta roja con icono si la fuente supera 30 min. |
 | v1.5 | 2026-10-07 | **Colgados scope** (banco: ceguera inaceptable). `window.ChangeOpsActions` y `tickets` por grupo ganan `staleInFlight`: pases `Pase en curso` con `FIN_IMPL` ya pasado, invisibles en timeline/tabla/drawers. Nueva tarjeta `Pases fuera de ventana` + drawer propio. |

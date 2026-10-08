@@ -620,8 +620,9 @@ visibility", or as anything that protects data.** It narrows what is rendered.
   `docs/DATA_CONTRACT.md` documents it; a v1 consumer that ignores it still
   works, because Python keeps `meta.kpis` and the web layer degrades when the
   key is absent.
-- The group definition is a **partition**, so the union of the three groups'
-  records equals the full in-scope dataset. That is asserted in tests, and the
+- The group definition is a **partition**, so the union of the groups'
+  records equals the full in-scope dataset (three groups at ADR-011 time,
+  four since T11 — same invariant, asserted in tests), and the
   global KPI object is not always the sum of the groups: rows outside every
   group (i.e. outside the pool whitelist) contribute to the global object only.
 
@@ -775,6 +776,8 @@ keep the ADR-009 treatment, so the change is deliberately asymmetric.
    unknown spelling variant must not collapse onto the base family).
 3. **Same group.** The `agileops` visibility group owns the new family, so
    the partition invariant holds and no pool goes dark in any view.
+   T11 (2026-10-07): the group later split in two — `oro` (ORO + Derivado)
+   and `prod` (Prod) — for a 4th topbar filter at the client's request.
 4. **Full token set.** `agileops-oro-derivado` gets `--color-*` +
    `--pool-accent-*` (light + dark), `.badge--*`, `.timeline__pool-header--*`
    and `.timeline__bar--*`, exactly like any family per `timeline.md`.

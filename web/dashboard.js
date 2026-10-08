@@ -228,8 +228,8 @@
      readable from devtools. The product owner chose that trade-off; ADR-011
      states the real fix.
 
-     The 3 groups arrive as DATA from Python (meta.visibilityGroups, ADR-009
-     discipline: the web layer hardcodes no group list). Every consumer of
+      The 4 groups arrive as DATA from Python (meta.visibilityGroups, ADR-009
+      discipline: the web layer hardcodes no group list). Every consumer of
      contract.timeline / contract.table / contract.kpis is routed through the
      active group below — see _applyGroup().
      ========================================================= */

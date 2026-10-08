@@ -281,7 +281,7 @@ The excluded `RECURSO` values are `INFRAESTRUCTURA` (265), `AUTOMATIZADO` (248),
 `DC_CONNECTIVITY(TELECOM)` (20), `CyberSOC` (12), `EU_NETWORKING` (6),
 `OPERACIONES DATA` (5), `SelfServices APIG` (1), `SelfServices AGIL` (1).
 
-Families roll up into the three visibility groups of the next section; the
+Families roll up into the four visibility groups of the next section; the
 mapping is declared over family names, so the two tables cannot drift apart.
 
 Note that `AUTOMATIZADO` and `AUTOMATIZADO ITSM` differ by one token. Inclusion
@@ -294,7 +294,7 @@ preference.
 ## Visibility groups (ADR-011)
 
 The topbar has a **Visibilidad** selector that narrows the whole dashboard to
-one of three **visibility groups**, so somebody working a single pool family does
+one of four **visibility groups**, so somebody working a single pool family does
 not have to read the other families' passes.
 
 > **This is a presentation filter, NOT access control.** Every group's data is
@@ -308,10 +308,11 @@ not have to read the other families' passes.
 |---|------|-------|---------------|---------|
 | 1 | `yape` | YAPE | `Yape` | **yes** |
 | 2 | `sf` | S&F | `S&F` | no |
-| 3 | `agileops` | AgileOps | `AgileOps ORO`, `AgileOps ORO Derivado`, `AgileOps Prod` | no |
+| 3 | `oro` | AgileOps ORO | `AgileOps ORO`, `AgileOps ORO Derivado` | no |
+| 4 | `prod` | AgileOps Prod | `AgileOps Prod` | no |
 
 Switching a group re-renders **everything**: the timeline, the operational table,
-the four KPI cards and the three action drawers. The active group and its record
+the five KPI cards and the five action drawers. The active group and its record
 count are shown next to the selector, scroll position and bar highlight reset,
 and a group with no results gets an explicit empty state instead of a blank
 screen.
@@ -325,7 +326,7 @@ The groups are declared as **pool families**, never as `RECURSO` values, in
 flattened from `_POOL_FAMILY_RESOURCES`. Python publishes the whole thing as
 `meta.visibilityGroups`, each entry carrying its own `kpis` and per-scope ticket
 ID sets, so **the web layer hardcodes no group and no pool**. The definitions must
-partition the four families: an orphaned or duplicated family raises
+partition the five families: an orphaned or duplicated family raises
 `ValueError` at import rather than silently dropping a pool from every view.
 
 Adding a pool family therefore touches the group table too — see the next

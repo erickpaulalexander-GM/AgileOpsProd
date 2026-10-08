@@ -242,7 +242,8 @@ body {
 /* Accent left-border per group token — the active group is unmistakable. */
 .pool-group__badge--yape     { border-left-color: var(--pool-accent-yape); }
 .pool-group__badge--sf       { border-left-color: var(--pool-accent-sf); }
-.pool-group__badge--agileops { border-left-color: var(--pool-accent-agileops-prod); }
+.pool-group__badge--oro      { border-left-color: var(--pool-accent-agileops-oro); }
+.pool-group__badge--prod     { border-left-color: var(--pool-accent-agileops-prod); }
 
 .pool-group__counts {
   font-size: 11px;
