@@ -466,8 +466,12 @@ body {
 }
 
 .badge--pase-en-curso {
-  background: var(--color-success);
-  color: #FFFFFF;
+  /* T16 (pedido del cliente, solo visual): badge compacto legible —
+     fondo claro + borde + texto verde. Tamano/padding/radius intactos
+     (heredados de .badge); el borde de 1px cabe en el padding de celda. */
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #86EFAC;
 }
 
 .badge--inicio-atrasado {
