@@ -468,7 +468,12 @@ def _compute_start_duration(
 
 
 def _row_to_bar(row: dict[str, Any], window_start: str) -> dict[str, Any] | None:
-    """Convert a single row to a timeline bar (ADR-004 minutes, ADR-012 window)."""
+    """Convert a single row to a timeline bar (ADR-004 minutes, ADR-012 window).
+
+    `start`/`duration` are grid geometry (T14 clips pre-window rows to the
+    left edge). `iniPlan`/`finPlan` carry the REAL planned datetimes for the
+    detail drawer (T15) — same `DD/MM HH:MM` display format as the table.
+    """
     ticket = row.get("ticket", "")
     if not ticket:
         return None
@@ -491,6 +496,8 @@ def _row_to_bar(row: dict[str, Any], window_start: str) -> dict[str, Any] | None
         "start": start_min,
         "duration": duration,
         "status": status,
+        "iniPlan": row["inicio_impl"].strftime("%d/%m %H:%M"),
+        "finPlan": row["fin_impl"].strftime("%d/%m %H:%M"),
     }
 
 

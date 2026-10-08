@@ -72,6 +72,7 @@ Out:
 - [x] T11 — Cuarto filtro: grupo ORO propio + Prod aparte (route: inline; test-first RED→GREEN)
 - [x] T12 — Revert split: derivado a tipo de barra, filtro ORO queda (route: inline; test-first RED→GREEN)
 - [x] T14 — Timeline dibuja solape recortado (route: inline; test-first RED→GREEN)
+- [x] T15 — Drawer con fechas reales, no geometría (route: inline; test-first RED→GREEN)
 - [x] T13 — Paleta en-curso del Timeline, solo visual (route: inline; 1 archivo)
 
 ## Acceptance criteria
@@ -112,6 +113,7 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T11 done: grupos 3→4 (`oro` ORO+Derivado, `prod` Prod; `agileops` muere, localStorage viejo cae a `yape`). Badge CSS por id + docs (README, DATA_CONTRACT v1.8, ADR-011/013). RED 11 fail (motor viejo) → GREEN `pytest 165 passed` + `ruff` + `node --check`. Smoke vivo 19:41: 4 grupos con conteos propios. Commit `f25b920`.
 - 2026-10-07 T12 done: revert T10 (derivado = tipo de barra en ORO, como los demás; tokens CSS muertos eliminados). Filtros intactos: `oro` owns ORO, `prod` owns Prod. RED 6 fail (motor spliteado) → GREEN `pytest 165 passed` + `ruff` + `node --check` x2. Smoke vivo 19:49: 4 filas, ORO 4 barras, grupos oro/prod con conteos. Docs: README, DATA_CONTRACT v1.9, ADR-013 marcado REVERTED. Commit `ea99216`.
 - 2026-10-07 T14 done: timeline dibuja solape (inicio adentro o previo con FIN válido pasado el borde), recorte a grilla en backend, frontend intacto. RED 2 fail → GREEN `pytest 171 passed` + `ruff` + `node --check` x2, sin roturas. Smoke vivo 20:24: OCD-230862 recortado (0+120) + 3 más. Docs: DATA_CONTRACT v1.10 + README + ADR-014. Commit `42df08c`.
+- 2026-10-07 T15 done: la barra lleva `iniPlan`/`finPlan` reales (mismo formato que la tabla); el drawer los prefiere con fallback calculado para HTML viejos; `timeline.js` los propaga en el aplanado. RED KeyError → GREEN `pytest 173 passed` + `ruff` + `node --check` x2. Smoke vivo 20:33: OCD-230862 (0+120, 07/10 19:00→22:00). Docs: DATA_CONTRACT v1.11.
 - 2026-10-07 T13 done: `.timeline__bar--pase-en-curso` con paleta exacta del diseño (fondo #ECFDF3 + diagonal 0.035 + outline #86D7A3 + acento izq 4px #16A34A vía background + texto #166534). Todo hacia adentro: dimensiones mapeadas intactas. Badge `.badge--pase-en-curso` y demás estados sin tocar. `pytest 165 passed` + `node --check` x2 + paleta verificada en el HTML generado.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 

@@ -667,8 +667,10 @@
     var recurso = barData.responsable || '';            // RECURSO ASIGNADO (v1.1.5)
 
     var typeLabel = barData.type === 'implementacion' ? 'Implementación' : 'Derivado';
-    var startTime = _fmtDateHHMM(barData.start);
-    var endTime = _fmtDateHHMM(barData.start + barData.duration);
+    // T15: real planned dates when the bar carries them (clipped geometry
+    // must never pose as data); computed fallback for older saved files.
+    var startTime = barData.iniPlan || _fmtDateHHMM(barData.start);
+    var endTime = barData.finPlan || _fmtDateHHMM(barData.start + barData.duration);
 
     title.textContent = barData.ticket;
     body.innerHTML = '<dl class="drawer__detail">'

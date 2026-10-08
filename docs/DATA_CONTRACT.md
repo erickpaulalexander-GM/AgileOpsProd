@@ -261,6 +261,8 @@ so the badge class can never drift from the bar token.
 | `start` | number | Integer minutes from `windowStart` (ADR-004). Always in `[0, 480)` — pre-window rows are clipped to the left edge (`0`). |
 | `duration` | number | Integer minutes **visible on the grid**. Clipped so `start + duration <= 480`. |
 | `status` | string | `"coordinado"`, `"pase-en-curso"` or `"inicio-atrasado"` |
+| `iniPlan` | string | Real `FEC. HORA. INI. IMPL` as `DD/MM HH:MM` — what the detail drawer shows (never the clipped geometry). |
+| `finPlan` | string | Real `FEC. HORA. FIN. IMPL` as `DD/MM HH:MM` — same rule. |
 
 > **A bar has no `pool` field.** The pool is carried **only** by the enclosing
 > `timeline[].pool` group. `timeline.js` injects it onto each bar when it
@@ -471,6 +473,7 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.11 | 2026-10-07 | **Real dates on bars** (T15). `timeline[].bars[]` gains `iniPlan`/`finPlan` (real `DD/MM HH:MM`) so the detail drawer shows planned dates, never clipped geometry. Additive, no geometry change. |
 | v1.10 | 2026-10-07 | **Timeline overlap scope** (ADR-014). El Timeline dibuja filas que solapan la ventana (inicio adentro, o inicio previo con FIN válido pasado su borde), recortadas a la grilla. Solo geometría: reglas, KPIs y tabla intactos. |
 | v1.9 | 2026-10-07 | **ORO Derivado vuelve a tipo de barra** (T12 revierte T10/ADR-013 a pedido del cliente: los carriles deben leerse igual que los demás pools). Enum 5 → 4; los 4 filtros del T11 quedan (`oro` owns ORO). |
 | v1.8 | 2026-10-07 | **Cuarto filtro** (pedido del cliente). Grupos 3 → 4: `oro` (`AgileOps ORO`, ORO + ORO Derivado) y `prod` (`AgileOps Prod`); `agileops` deja de existir (el `localStorage` viejo cae al default `yape` por diseño). |

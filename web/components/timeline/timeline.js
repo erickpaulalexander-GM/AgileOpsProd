@@ -145,6 +145,9 @@ window.Timeline = (function () {
           status: bar.status,
           start: bar.start,         // minutes from window start (ADR-004)
           duration: bar.duration,   // minutes (ADR-004)
+          // T15: real planned dates (clipped geometry must never pose as data)
+          iniPlan: bar.iniPlan,
+          finPlan: bar.finPlan,
           pool: group.pool,         // pool family, from meta.poolOrder
           responsable: _responsableFor(bar.ticket),
         });

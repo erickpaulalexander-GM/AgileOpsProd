@@ -109,3 +109,33 @@ def test_future_start_stays_out():
     ]
     kept, dropped = filter_to_window(rows, WINDOW)
     assert kept == [] and dropped == 1
+
+
+def test_clipped_bar_carries_real_planned_dates():
+    """T15: el drawer debe mostrar INI/FIN reales, no la geometria recortada."""
+    rows = [
+        _row(
+            "T-DATES",
+            "Pool AgileOps Prod",
+            datetime(2026, 10, 7, 19, 0),
+            datetime(2026, 10, 7, 22, 0),
+        )
+    ]
+    bar = _bars(rows)["T-DATES"]
+    assert (bar["start"], bar["duration"]) == (0, 120)
+    assert bar["iniPlan"] == "07/10 19:00"
+    assert bar["finPlan"] == "07/10 22:00"
+
+
+def test_plain_bar_carries_real_planned_dates():
+    rows = [
+        _row(
+            "T-PLAIN",
+            "Pool AgileOps Prod",
+            datetime(2026, 10, 7, 21, 0),
+            datetime(2026, 10, 7, 22, 30),
+        )
+    ]
+    bar = _bars(rows)["T-PLAIN"]
+    assert bar["iniPlan"] == "07/10 21:00"
+    assert bar["finPlan"] == "07/10 22:30"
