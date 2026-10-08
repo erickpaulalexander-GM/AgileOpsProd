@@ -29,7 +29,7 @@ Values below are the real values of the last pipeline run on
     "updatedAt": "2026-10-06T09:55:00",
     "windowStart": "09:00",
     "windowEnd": "17:00",
-    "poolOrder": ["Yape", "S&F", "AgileOps ORO", "AgileOps ORO Derivado", "AgileOps Prod"]
+    "poolOrder": ["Yape", "S&F", "AgileOps ORO", "AgileOps Prod"]
   },
   "kpis": {
     "lateStarts": 3,
@@ -103,7 +103,7 @@ anchors `updatedAt` or the window. It survives as a separate field in
 |----------|-------|
 | Emitter | Python — `python/adapter.py::to_contract`, from `column_map.POOL_FAMILY_ORDER` |
 | Consumer | `web/components/timeline/timeline.js::_resolvePoolOrder` (called once in `init()`) and `web/dashboard.js` |
-| Cardinality | Always **all 5** families, in this exact order: `Yape`, `S&F`, `AgileOps ORO`, `AgileOps ORO Derivado`, `AgileOps Prod` |
+| Cardinality | Always **all 4** families, in this exact order: `Yape`, `S&F`, `AgileOps ORO`, `AgileOps Prod` |
 | Empty-window behaviour | Unchanged: the full list is emitted even when `timeline` is `[]` |
 
 * It is the **single source of display order**. The web layer contains no
@@ -142,7 +142,7 @@ Current groups, all three emitted unconditionally:
 |---|------|---------|------------|---------|
 | 1 | `yape` | `YAPE` | `Yape` | **yes** |
 | 2 | `sf` | `S&F` | `S&F` | no |
-| 3 | `oro` | `AgileOps ORO` | `AgileOps ORO`, `AgileOps ORO Derivado` | no |
+| 3 | `oro` | `AgileOps ORO` | `AgileOps ORO` | no |
 | 4 | `prod` | `AgileOps Prod` | `AgileOps Prod` | no |
 
 ##### `meta.visibilityGroups[].tickets`
@@ -206,21 +206,20 @@ bars are omitted entirely (`python/adapter.py::to_contract`).
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `pool` | string | Pool family name — **exactly one of** `"Yape"`, `"S&F"`, `"AgileOps ORO"`, `"AgileOps ORO Derivado"`, `"AgileOps Prod"` (see `pool` enum below) |
+| `pool` | string | Pool family name — **exactly one of** `"Yape"`, `"S&F"`, `"AgileOps ORO"`, `"AgileOps Prod"` (see `pool` enum below) |
 | `bars[]` | array | The bars of that pool |
 
 #### `pool` enum
 
-The `pool` field is a closed enum of exactly five values, and those are the only
-five values that ever appear in the contract:
+The `pool` field is a closed enum of exactly four values, and those are the only
+four values that ever appear in the contract:
 
 | # | `pool` | CSS token slug | Matching `RECURSO` values |
 |---|--------|----------------|--------------------------|
 | 1 | `Yape` | `yape` | `POOL - YAPE`, `POOL - YAPE-DERIVADO` |
 | 2 | `S&F` | `sf` | `Pool S&F`, `POOL S&F-DERIVADO` |
-| 3 | `AgileOps ORO` | `agileops-oro` | `Pool AgileOps ORO` |
-| 4 | `AgileOps ORO Derivado` | `agileops-oro-derivado` | `Pool AgileOps ORO - Derivado` |
-| 5 | `AgileOps Prod` | `agileops-prod` | `Pool AgileOps Prod`, `Pool AgileOps Prod - Derivado` |
+| 3 | `AgileOps ORO` | `agileops-oro` | `Pool AgileOps ORO`, `Pool AgileOps ORO - Derivado` |
+| 4 | `AgileOps Prod` | `agileops-prod` | `Pool AgileOps Prod`, `Pool AgileOps Prod - Derivado` |
 
 `timeline[].pool` and `table[].pool` share this enum — they are produced by the
 same function, `column_map.get_pool_name()`.
@@ -236,7 +235,7 @@ change:
 | `Yape` | `yape` | `--color-yape` | `#B45309` / `#FB923C` | `.badge--yape` |
 | `S&F` | `sf` | `--color-sf` | `#7C3AED` / `#A78BFA` | `.badge--sf` |
 | `AgileOps ORO` | `agileops-oro` | `--color-agileops-oro` | `#1D4ED8` / `#38BDF8` | `.badge--agileops-oro` |
-| `AgileOps ORO Derivado` | `agileops-oro-derivado` | `--color-agileops-oro-derivado` | `#0F766E` / `#2DD4BF` | `.badge--agileops-oro-derivado` |
+| `AgileOps Prod` | `agileops-prod` | `--color-agileops-prod` | `#BE185D` / `#F472B6` | `.badge--agileops-prod` |
 | `AgileOps Prod` | `agileops-prod` | `--color-agileops-prod` | `#BE185D` / `#F472B6` | `.badge--agileops-prod` |
 | *(no pool)* | `unknown` | `--bg-hover` | `var(--border-strong)` | *(no rule — falls back to the base `.badge`)* |
 
@@ -414,7 +413,7 @@ was anchored to the Excel mtime (`2026-10-05 21:40:36`), producing the
 |------|-------|----------------------|
 | Rows read | 1432 | no |
 | Rows in scope | 571 (861 ignored) | no |
-| `meta.poolOrder` | `["Yape","S&F","AgileOps ORO","AgileOps ORO Derivado","AgileOps Prod"]` (5 entries since T10; 4 in the historical run below) | no |
+| `meta.poolOrder` | `["Yape","S&F","AgileOps ORO","AgileOps Prod"]` (4 entries; 5 briefly during T10, reverted in T12) | no |
 | Window | `21:00 → 05:00` (480 min) in that historical run | **yes** |
 | Timeline groups / bars | 4 groups — Yape 2, S&F 18, AgileOps ORO 9, AgileOps Prod 53 (82 bars) | **yes** |
 | Table rows | 175 | **yes** |
@@ -431,7 +430,7 @@ The 571 in-scope rows are exactly the sum of the per-value `RECURSO` counts:
 | `Pool S&F` | 59 | `S&F` |
 | `POOL S&F-DERIVADO` | 47 | `S&F` |
 | `Pool AgileOps ORO` | 32 | `AgileOps ORO` |
-| `Pool AgileOps ORO - Derivado` | 39 | `AgileOps ORO Derivado` (own family since T10; `AgileOps ORO` in the historical run below) |
+| `Pool AgileOps ORO - Derivado` | 39 | `AgileOps ORO` |
 | `Pool AgileOps Prod` | 231 | `AgileOps Prod` |
 | `Pool AgileOps Prod - Derivado` | 155 | `AgileOps Prod` |
 | **Total** | **571** | |
@@ -467,6 +466,7 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.9 | 2026-10-07 | **ORO Derivado vuelve a tipo de barra** (T12 revierte T10/ADR-013 a pedido del cliente: los carriles deben leerse igual que los demás pools). Enum 5 → 4; los 4 filtros del T11 quedan (`oro` owns ORO). |
 | v1.8 | 2026-10-07 | **Cuarto filtro** (pedido del cliente). Grupos 3 → 4: `oro` (`AgileOps ORO`, ORO + ORO Derivado) y `prod` (`AgileOps Prod`); `agileops` deja de existir (el `localStorage` viejo cae al default `yape` por diseño). |
 | v1.7 | 2026-10-07 | **ORO Derivado split** (ADR-013, partial exception to ADR-009). `pool` enum grows 4 → 5: `AgileOps ORO Derivado` is its own family with token `agileops-oro-derivado`; `meta.poolOrder` carries 5 entries; the `agileops` visibility group owns 3 families. Other `-DERIVADO` variants stay bar type. |
 | v1.6 | 2026-10-07 | **Sello de fuente en el header**. `dashboard.html` incrusta `window.AgileOpsSource` (nombre + mtime del Excel, payload separado NO contrato) y el header lo muestra junto a `Actualización` para juzgar frescura del archivo. El contrato sigue sin campo mtime. T9: relativo (`hace N min`, fecha exacta en tooltip) + alerta roja con icono si la fuente supera 30 min. |

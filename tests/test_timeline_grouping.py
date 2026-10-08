@@ -42,19 +42,18 @@ def test_timeline_grouped_by_pool_not_responsable():
 
 
 def test_timeline_group_order_is_display_order():
-    """All 5 families render in the canonical display order, not alphabetical."""
+    """All 4 families render in the canonical display order, not alphabetical."""
     rows = [
         _row("T-prod", "Ana", 9, recurso="Pool AgileOps Prod - Derivado"),
         _row("T-sf", "Beto", 10, recurso="POOL S&F-DERIVADO"),
         _row("T-oro", "Caro", 11, recurso="Pool AgileOps ORO"),
-        _row("T-oro-der", "Elena", 12, recurso="Pool AgileOps ORO - Derivado"),
-        _row("T-yape", "Dani", 13, recurso="POOL - YAPE-DERIVADO"),
+        _row("T-yape", "Dani", 12, recurso="POOL - YAPE-DERIVADO"),
     ]
     window = compute_window(datetime(2026, 9, 11, 8, 30))
     contract = to_contract(rows, {}, window)
 
     assert [g["pool"] for g in contract["timeline"]] == [
-        "Yape", "S&F", "AgileOps ORO", "AgileOps ORO Derivado", "AgileOps Prod",
+        "Yape", "S&F", "AgileOps ORO", "AgileOps Prod",
     ]
     assert contract["meta"]["poolOrder"] == list(POOL_FAMILY_ORDER)
 

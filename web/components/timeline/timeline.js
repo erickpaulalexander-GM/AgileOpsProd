@@ -524,7 +524,6 @@ window.Timeline = (function () {
     *   "Yape"        → "yape"
     *   "S&F"         → "sf"
     *   "AgileOps ORO"  → "agileops-oro"
-    *   "AgileOps ORO Derivado" → "agileops-oro-derivado"
     *   "AgileOps Prod" → "agileops-prod"
    *
    * dashboard.js reaches this through window.Timeline.poolKey, so the badge

@@ -1,9 +1,9 @@
 """
 T7 — pool visibility groups as a PRESENTATION LAYER (ADR-011).
 
-The 5 pool families (Yape, S&F, AgileOps ORO, AgileOps ORO Derivado,
-AgileOps Prod) are grouped into 4 visibility groups (YAPE, S&F, AgileOps ORO,
-AgileOps Prod) that the dashboard exposes through a
+The 4 pool families (Yape, S&F, AgileOps ORO, AgileOps Prod) are grouped into
+4 visibility groups (YAPE, S&F, AgileOps ORO, AgileOps Prod) that the dashboard
+exposes through a
 selector. The grouping sits ON TOP of the pool scope (ADR-009): it never widens
 nor narrows inclusion, it only partitions what is already in scope.
 
@@ -15,8 +15,6 @@ These tests pin:
   family orphaned (and therefore invisible in every group) and none duplicated;
 - full coverage of the 8 in-scope RECURSO values;
 - per-group KPIs next to the global KPI object (which must stay);
-- that the two-family group (AgileOps ORO) really aggregates across both families
-  instead of reporting only one of them;
 - that the projection is defensive: a malformed group table is a loud
   ValueError, never a silently dropped pool.
 """
@@ -41,7 +39,7 @@ from rules import apply_rules
 EXPECTED_GROUPS = [
     ("yape", "YAPE", ["Yape"]),
     ("sf", "S&F", ["S&F"]),
-    ("oro", "AgileOps ORO", ["AgileOps ORO", "AgileOps ORO Derivado"]),
+    ("oro", "AgileOps ORO", ["AgileOps ORO"]),
     ("prod", "AgileOps Prod", ["AgileOps Prod"]),
 ]
 
@@ -120,7 +118,7 @@ def test_each_group_family_list_is_correct():
     projected = {g["id"]: g for g in visibility_groups()}
     assert projected["yape"]["families"] == ["Yape"]
     assert projected["sf"]["families"] == ["S&F"]
-    assert projected["oro"]["families"] == ["AgileOps ORO", "AgileOps ORO Derivado"]
+    assert projected["oro"]["families"] == ["AgileOps ORO"]
     assert projected["prod"]["families"] == ["AgileOps Prod"]
 
 
@@ -249,7 +247,7 @@ def test_contract_publishes_the_groups_with_zero_bars_in_the_window():
 
 
 def test_pool_order_is_untouched_by_the_grouping():
-    """The 5 families and their display order are NOT collapsed into groups."""
+    """The 4 families and their display order are NOT collapsed into groups."""
     window = compute_window(REFERENCE)
     contract = to_contract([], {}, window)
     assert contract["meta"]["poolOrder"] == list(POOL_FAMILY_ORDER)
@@ -327,8 +325,8 @@ def test_per_group_kpis_do_not_count_another_groups_rows():
     assert contract["kpis"]["lateStarts"] == 2
 
 
-def test_oro_group_aggregates_across_both_oro_families():
-    """ORO covers base + Derivado: its KPI must be the SUM, not one of them."""
+def test_oro_group_covers_base_and_derivado_rows():
+    """ORO is one family: base + Derivado rows land in the oro group."""
     rows = [
         _row("T-ORO-1", "Pool AgileOps ORO", ANCHOR + timedelta(minutes=10),
              ANCHOR + timedelta(minutes=40)),
@@ -336,28 +334,16 @@ def test_oro_group_aggregates_across_both_oro_families():
              ANCHOR + timedelta(minutes=15), ANCHOR + timedelta(minutes=45)),
         _row("T-PROD-1", "Pool AgileOps Prod", ANCHOR + timedelta(minutes=20),
              ANCHOR + timedelta(minutes=50)),
-        _row("T-PROD-2", "Pool AgileOps Prod - Derivado",
-             ANCHOR + timedelta(minutes=25), ANCHOR + timedelta(minutes=55)),
         _row("T-YAPE", "POOL - YAPE", ANCHOR + timedelta(minutes=10),
              ANCHOR + timedelta(minutes=40)),
     ]
     contract = _contract_with_groups(rows)
 
-    base_alone = _contract_with_groups([rows[0]])["kpis"]
-    der_alone = _contract_with_groups([rows[1]])["kpis"]
-
     group = _group_by_id(contract, "oro")
     assert group["kpis"]["lateStarts"] == 2
-    assert group["kpis"]["ratificationsExpired"] == 2
-    # The group total is strictly greater than either family alone: it really
-    # aggregates, it does not report a single family.
-    assert group["kpis"]["lateStarts"] > base_alone["lateStarts"]
-    assert group["kpis"]["lateStarts"] > der_alone["lateStarts"]
-    assert group["kpis"]["lateStarts"] == (
-        base_alone["lateStarts"] + der_alone["lateStarts"]
-    )
-    # Prod lives in its own group now, unaffected by the ORO families.
-    assert _group_by_id(contract, "prod")["kpis"]["lateStarts"] == 2
+    assert group["tickets"]["passesInWindow"] == ["T-ORO-1", "T-ORO-2"]
+    # Prod lives in its own group now, unaffected by the ORO rows.
+    assert _group_by_id(contract, "prod")["kpis"]["lateStarts"] == 1
     assert _group_by_id(contract, "yape")["kpis"]["lateStarts"] == 1
     assert _group_by_id(contract, "sf")["kpis"]["lateStarts"] == 0
 

@@ -178,7 +178,6 @@
 .timeline__pool-header--yape          { --pool-accent: var(--pool-accent-yape); }
 .timeline__pool-header--sf            { --pool-accent: var(--pool-accent-sf); }
 .timeline__pool-header--agileops-oro { --pool-accent: var(--pool-accent-agileops-oro); }
-.timeline__pool-header--agileops-oro-derivado { --pool-accent: var(--pool-accent-agileops-oro-derivado); }
 .timeline__pool-header--agileops-prod { --pool-accent: var(--pool-accent-agileops-prod); }
 
 .timeline__pool-dot {
@@ -287,10 +286,6 @@
 
 .timeline__bar--agileops-oro {
   background: var(--color-agileops-oro);
-}
-
-.timeline__bar--agileops-oro-derivado {
-  background: var(--color-agileops-oro-derivado);
 }
 
 .timeline__bar--agileops-prod {

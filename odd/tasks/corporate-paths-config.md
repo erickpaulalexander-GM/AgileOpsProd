@@ -50,6 +50,7 @@ Out:
 - `tests/test_pool_scope.py`
 - `tests/test_timeline_grouping.py`
 - `web/components/timeline/*`
+- `tests/test_source_stamp.py`
 - `README.md`
 - `docs/*`
 - `odd/tasks/corporate-paths-config.md`
@@ -67,6 +68,7 @@ Out:
 - [x] T9b — Header todo relativo (`hace N min`, fecha exacta en tooltip)
 - [x] T10 — Split ORO / ORO-Derivado en pools separados (route: inline; test-first RED→GREEN)
 - [x] T11 — Cuarto filtro: grupo ORO propio + Prod aparte (route: inline; test-first RED→GREEN)
+- [x] T12 — Revert split: derivado a tipo de barra, filtro ORO queda (route: inline; test-first RED→GREEN)
 
 ## Acceptance criteria
 - Con `config.yaml` por defecto, `run.py` y `python/main.py` generan los mismos 3 outputs que hoy en `workspace/output/`.
@@ -104,6 +106,7 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T9 done: `Fuente: <arch> · DD/MM/YYYY HH:MM` + icono rojo y `hace N min` si supera 30 min (`SOURCE_STALE_MIN`, tooltip). Sin tests python (lógica solo-front); `node --check` ok + regen en vivo. Commit `f4bd8a1`.
 - 2026-10-07 T10 done: `AgileOps ORO Derivado` familia propia (excepción parcial ADR-009 → ADR-013, solo ORO). Tabla + token largo-antes + grupo agileops + set CSS completo + docs (README, DATA_CONTRACT v1.7, ADR-013, timeline.md). RED 9 fail → GREEN `pytest 165 passed` + `ruff` + `node --check` x2. Smoke vivo 19:32: 5 filas, poolOrder 5, grupo agileops 3 familias. Commit `16f5172`.
 - 2026-10-07 T11 done: grupos 3→4 (`oro` ORO+Derivado, `prod` Prod; `agileops` muere, localStorage viejo cae a `yape`). Badge CSS por id + docs (README, DATA_CONTRACT v1.8, ADR-011/013). RED 11 fail (motor viejo) → GREEN `pytest 165 passed` + `ruff` + `node --check`. Smoke vivo 19:41: 4 grupos con conteos propios. Commit `f25b920`.
+- 2026-10-07 T12 done: revert T10 (derivado = tipo de barra en ORO, como los demás; tokens CSS muertos eliminados). Filtros intactos: `oro` owns ORO, `prod` owns Prod. RED 6 fail (motor spliteado) → GREEN `pytest 165 passed` + `ruff` + `node --check` x2. Smoke vivo 19:49: 4 filas, ORO 4 barras, grupos oro/prod con conteos. Docs: README, DATA_CONTRACT v1.9, ADR-013 marcado REVERTED.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 
 ## Next step

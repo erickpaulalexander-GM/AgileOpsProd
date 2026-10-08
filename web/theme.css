@@ -28,7 +28,6 @@
   --color-yape: #F6E7A7;
   --color-sf: #E6D7FF;
   --color-agileops-oro: #BFDBFE;
-  --color-agileops-oro-derivado: #CCFBF1;
   --color-agileops-prod: #FBCFE8;
 
   /* Light-theme accents. Yape/S&F keep their original values so the look
@@ -36,7 +35,6 @@
   --pool-accent-yape: #B45309;         /* amber-700  */
   --pool-accent-sf: #7C3AED;           /* violet-700 */
   --pool-accent-agileops-oro: #1D4ED8; /* blue-700   */
-  --pool-accent-agileops-oro-derivado: #0F766E; /* teal-700 */
   --pool-accent-agileops-prod: #BE185D;/* pink-700   */
 
   /* Semantic */
@@ -90,7 +88,6 @@
   --pool-accent-yape: #B45309;
   --pool-accent-sf: #7C3AED;
   --pool-accent-agileops-oro: #1D4ED8;
-  --pool-accent-agileops-oro-derivado: #0F766E;
   --pool-accent-agileops-prod: #BE185D;
 }
 
@@ -124,7 +121,6 @@
   --pool-accent-yape: #FB923C;         /* orange-400 */
   --pool-accent-sf: #A78BFA;           /* violet-400 */
   --pool-accent-agileops-oro: #38BDF8; /* sky-400   */
-  --pool-accent-agileops-oro-derivado: #2DD4BF; /* teal-400 */
   --pool-accent-agileops-prod: #F472B6;/* pink-400  */
 }
 
@@ -456,11 +452,6 @@ body {
 .badge--agileops-oro {
   background: var(--color-agileops-oro);
   color: #1E3A8A;
-}
-
-.badge--agileops-oro-derivado {
-  background: var(--color-agileops-oro-derivado);
-  color: #115E59;
 }
 
 .badge--agileops-prod {

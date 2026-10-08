@@ -751,6 +751,14 @@ python python\main.py
 
 ## ADR-013 AgileOps ORO Derivado is its own pool
 
+**Partial exception to ADR-009, at the client's request — REVERTED the same
+day (T12), at the same requester's request.** The lanes must read exactly
+like every other pool, so ORO Derivado is bar type inside ORO again and this
+ADR is historical record only. The 4th topbar filter (T11, `oro` group owning
+the whole ORO family) stays.
+
+What was decided (and reverted) is preserved verbatim below.
+
 **Partial exception to ADR-009, at the client's request.** ADR-009 stays the
 rule — every other `-DERIVADO` variant remains bar type, never pool — but
 `Pool AgileOps ORO - Derivado` now resolves to its own family,
@@ -778,6 +786,8 @@ keep the ADR-009 treatment, so the change is deliberately asymmetric.
    the partition invariant holds and no pool goes dark in any view.
    T11 (2026-10-07): the group later split in two — `oro` (ORO + Derivado)
    and `prod` (Prod) — for a 4th topbar filter at the client's request.
+   T12 (2026-10-07): reverted with the family — `oro` now owns ORO alone,
+   `prod` owns Prod; both filters stay.
 4. **Full token set.** `agileops-oro-derivado` gets `--color-*` +
    `--pool-accent-*` (light + dark), `.badge--*`, `.timeline__pool-header--*`
    and `.timeline__bar--*`, exactly like any family per `timeline.md`.

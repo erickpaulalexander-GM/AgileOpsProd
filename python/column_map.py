@@ -99,10 +99,9 @@ DATE_COLUMNS = [
 _POOL_FAMILY_RESOURCES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Yape", ("POOL - YAPE", "POOL - YAPE-DERIVADO")),
     ("S&F", ("Pool S&F", "POOL S&F-DERIVADO")),
-    ("AgileOps ORO", ("Pool AgileOps ORO",)),
-    # T10 (pedido del cliente): ORO Derivado es pool propio, como Yape y S&F.
-    # Las demas variantes -DERIVADO siguen siendo tipo de barra, no pool.
-    ("AgileOps ORO Derivado", ("Pool AgileOps ORO - Derivado",)),
+    # T12: ORO Derivado vuelve a ser tipo de barra dentro de ORO (como los
+    # demas derivados) — el filtro ORO propio del T11 se mantiene.
+    ("AgileOps ORO", ("Pool AgileOps ORO", "Pool AgileOps ORO - Derivado")),
     ("AgileOps Prod", ("Pool AgileOps Prod", "Pool AgileOps Prod - Derivado")),
 )
 
@@ -147,12 +146,10 @@ _RESOURCE_TO_FAMILY: dict[str, str] = {
 # Ordered loose tokens, used for FAMILY RESOLUTION ONLY — never for inclusion.
 # AGILEOPSORO / AGILEOPSPROD are strictly longer than AGILEOPS and are
 # evaluated in family order, so resolution never collapses onto "AGILEOPS"
-# alone and can never steal one family from another. The DERIVADO token
-# goes BEFORE its base family: "…ORO-DERIVADO" contains "AGILEOPSORO".
+# alone and can never steal one family from another.
 _FAMILY_TOKENS: tuple[tuple[str, str], ...] = (
     ("Yape", "YAPE"),
     ("S&F", "S&F"),
-    ("AgileOps ORO Derivado", "AGILEOPSORODERIVADO"),
     ("AgileOps ORO", "AGILEOPSORO"),
     ("AgileOps Prod", "AGILEOPSPROD"),
 )
@@ -191,12 +188,10 @@ def get_pool_name(recurso: Any) -> str:
 
     "POOL - YAPE"                          → "Yape"
     "Pool S&F" / "POOL S&F-DERIVADO"        → "S&F"   (one family, no space)
-    "Pool AgileOps ORO"                     → "AgileOps ORO"
-    "Pool AgileOps ORO - Derivado"          → "AgileOps ORO Derivado"  (T10)
-    "Pool AgileOps Prod"                    → "AgileOps Prod"
+    "Pool AgileOps ORO - Derivado"         → "AgileOps ORO"
+    "Pool AgileOps Prod"                   → "AgileOps Prod"
 
-    The DERIVADO distinction stays in get_bar_type(), NOT in the pool name —
-    except "Pool AgileOps ORO - Derivado", which is its own family (T10).
+    The DERIVADO distinction stays in get_bar_type(), NOT in the pool name.
     """
     key = normalize_recurso(recurso)
     if not key:
@@ -236,10 +231,12 @@ def get_pool_name(recurso: Any) -> str:
 
 # (group id, display label, pool families in this group)
 # T11 (pedido del cliente): todo ORO tiene filtro propio; Prod queda aparte.
+# T12: el split de familias se revierte (derivado = tipo de barra), pero los
+# 4 filtros quedan: oro owns ORO, prod owns Prod.
 _VISIBILITY_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("yape", "YAPE", ("Yape",)),
     ("sf", "S&F", ("S&F",)),
-    ("oro", "AgileOps ORO", ("AgileOps ORO", "AgileOps ORO Derivado")),
+    ("oro", "AgileOps ORO", ("AgileOps ORO",)),
     ("prod", "AgileOps Prod", ("AgileOps Prod",)),
 )
 
