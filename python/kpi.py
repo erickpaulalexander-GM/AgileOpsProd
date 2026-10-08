@@ -117,6 +117,7 @@ def group_ticket_scopes(
     window_rows: list[dict[str, Any]],
     in_flight_rows: list[dict[str, Any]] | None = None,
     stale_in_flight_rows: list[dict[str, Any]] | None = None,
+    early_start_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, list[str]]:
     """
     Ticket IDs of one visibility group, per action scope.
@@ -125,7 +126,8 @@ def group_ticket_scopes(
     window rows, the three alert scopes use the full in-scope set filtered by
     the same rule flags the global payload is built from. A flag reads False for
     terminal rows (ADR-006), so terminal rows never enter a group scope.
-    The en-vuelo (T5) and colgados (T6) scopes use their precomputed rows.
+    The en-vuelo (T5), colgados (T6) and adelantados (T20) scopes use their
+    precomputed rows.
     """
     scopes: dict[str, list[str]] = {}
 
@@ -150,6 +152,11 @@ def group_ticket_scopes(
         for row in (stale_in_flight_rows or [])
         if (ticket := _row_ticket(row))
     ]
+    scopes["earlyStart"] = [
+        ticket
+        for row in (early_start_rows or [])
+        if (ticket := _row_ticket(row))
+    ]
 
     return scopes
 
@@ -160,6 +167,7 @@ def update_contract_visibility_kpis(
     window_rows: list[dict[str, Any]],
     in_flight_rows: list[dict[str, Any]] | None = None,
     stale_in_flight_rows: list[dict[str, Any]] | None = None,
+    early_start_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Attach per-visibility-group KPIs and action ticket scopes to the contract.
@@ -184,6 +192,7 @@ def update_contract_visibility_kpis(
         window_rows: In-window annotated rows (timeline / passesInWindow scope)
         in_flight_rows: En-vuelo rows (T5, renderer.filter_in_flight scope)
         stale_in_flight_rows: Colgados rows (T6, renderer.filter_stale_in_flight)
+        early_start_rows: Adelantados rows (T20, renderer.filter_early_start)
 
     Returns:
         The updated contract
@@ -201,6 +210,7 @@ def update_contract_visibility_kpis(
     window_by_group: dict[str, list[dict[str, Any]]] = {}
     in_flight_by_group: dict[str, list[dict[str, Any]]] = {}
     stale_by_group: dict[str, list[dict[str, Any]]] = {}
+    early_by_group: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         group_id = get_visibility_group(row.get("recurso", ""))
         if group_id:
@@ -217,6 +227,10 @@ def update_contract_visibility_kpis(
         group_id = get_visibility_group(row.get("recurso", ""))
         if group_id:
             stale_by_group.setdefault(group_id, []).append(row)
+    for row in early_start_rows or []:
+        group_id = get_visibility_group(row.get("recurso", ""))
+        if group_id:
+            early_by_group.setdefault(group_id, []).append(row)
 
     for group in groups:
         if not isinstance(group, dict):
@@ -231,6 +245,7 @@ def update_contract_visibility_kpis(
             window_by_group.get(group_id, []),
             in_flight_rows=in_flight_by_group.get(group_id, []),
             stale_in_flight_rows=stale_by_group.get(group_id, []),
+            early_start_rows=early_by_group.get(group_id, []),
         )
 
     return contract

@@ -92,6 +92,7 @@ def test_payload_keys_include_in_flight():
         "ratificationsExpired",
         "inFlightNow",
         "staleInFlight",
+        "earlyStart",
     }
 
 

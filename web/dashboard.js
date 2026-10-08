@@ -295,7 +295,7 @@
     var tickets = group && group.raw ? group.raw.tickets : null;
     if (!tickets || typeof tickets !== 'object') return null;
     var set = {};
-    ['passesInWindow', 'lateStarts', 'ratificationsSoon', 'ratificationsExpired', 'inFlightNow', 'staleInFlight']
+    ['passesInWindow', 'lateStarts', 'ratificationsSoon', 'ratificationsExpired', 'inFlightNow', 'staleInFlight', 'earlyStart']
       .forEach(function (scope) {
         var list = tickets[scope];
         if (!Array.isArray(list)) return;
@@ -344,6 +344,7 @@
       passesInWindow: ACTIONS && Array.isArray(ACTIONS.passesInWindow) ? ACTIONS.passesInWindow : [],
       inFlightNow: ACTIONS && Array.isArray(ACTIONS.inFlightNow) ? ACTIONS.inFlightNow : [],
       staleInFlight: ACTIONS && Array.isArray(ACTIONS.staleInFlight) ? ACTIONS.staleInFlight : [],
+      earlyStart: ACTIONS && Array.isArray(ACTIONS.earlyStart) ? ACTIONS.earlyStart : [],
       lateStarts: ACTIONS && Array.isArray(ACTIONS.lateStarts) ? ACTIONS.lateStarts : [],
       ratificationsSoon: ACTIONS && Array.isArray(ACTIONS.ratificationsSoon) ? ACTIONS.ratificationsSoon : [],
       ratificationsExpired: ACTIONS && Array.isArray(ACTIONS.ratificationsExpired) ? ACTIONS.ratificationsExpired : [],
@@ -354,6 +355,7 @@
           passesInWindow: _filterActionList(actions.passesInWindow),
           inFlightNow: _filterActionList(actions.inFlightNow),
           staleInFlight: _filterActionList(actions.staleInFlight),
+          earlyStart: _filterActionList(actions.earlyStart),
           lateStarts: _filterActionList(actions.lateStarts),
           ratificationsSoon: _filterActionList(actions.ratificationsSoon),
           ratificationsExpired: _filterActionList(actions.ratificationsExpired),
@@ -392,6 +394,7 @@
     // T5: the headline total is EN VUELO (en curso ahora), not in-window.
     set('kpi-total', view.actions.inFlightNow.length);
     set('kpi-colgados', view.actions.staleInFlight.length);
+    set('kpi-adelantados', view.actions.earlyStart.length);
     set('kpi-atrasados', kpis.lateStarts);
     set('kpi-coordinados', kpis.ratificationsSoon);
     set('kpi-en-curso', kpis.ratificationsExpired);
@@ -403,6 +406,7 @@
     var labels = {
       'total': 'Pases en curso',
       'colgados': 'Pases fuera de ventana',
+      'adelantados': 'Pases adelantados',
       'atrasados': 'Pases atrasados',
       'coordinados': 'Ratificaciones por vencer',
       'en-curso': 'Ratificaciones vencidas',
@@ -417,7 +421,7 @@
       }
     });
     // Reorder cards to the v1.1 action-model order
-    ['total', 'atrasados', 'colgados', 'coordinados', 'en-curso'].forEach(function (key) {
+    ['total', 'atrasados', 'colgados', 'adelantados', 'coordinados', 'en-curso'].forEach(function (key) {
       var card = section.querySelector('.kpi-card[data-kpi="' + key + '"]');
       if (card) section.appendChild(card);
     });
@@ -453,6 +457,8 @@
       openActionDrawer('Pases en curso', A.inFlightNow, 'inFlightNow');
     } else if (key === 'colgados') {
       openActionDrawer('Pases fuera de ventana', A.staleInFlight, 'staleInFlight');
+    } else if (key === 'adelantados') {
+      openActionDrawer('Pases adelantados', A.earlyStart, 'earlyStart');
     } else if (key === 'atrasados') {
       openActionDrawer('Pases atrasados', A.lateStarts, 'lateStarts');
     } else if (key === 'coordinados') {

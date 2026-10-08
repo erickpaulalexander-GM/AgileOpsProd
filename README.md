@@ -316,7 +316,7 @@ not have to read the other families' passes.
 | 4 | `prod` | AgileOps Prod | `AgileOps Prod` | no |
 
 Switching a group re-renders **everything**: the timeline, the operational table,
-the five KPI cards and the five action drawers. The active group and its record
+the six KPI cards and the six action drawers. The active group and its record
 count are shown next to the selector, scroll position and bar highlight reset,
 and a group with no results gets an explicit empty state instead of a blank
 screen.

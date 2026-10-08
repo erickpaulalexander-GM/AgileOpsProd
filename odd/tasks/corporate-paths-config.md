@@ -54,6 +54,7 @@ Out:
 - `tests/test_stale_flight.py`
 - `tests/test_window_overlap.py`
 - `tests/test_shifts.py`
+- `tests/test_early_start.py`
 - `README.md`
 - `docs/*`
 - `odd/tasks/corporate-paths-config.md`
@@ -79,6 +80,7 @@ Out:
 - [x] T18 — Turnos backend: loader+matcher+payload (route: inline; test-first RED→GREEN)
 - [x] T19 — Turnos frontend: sombreado fuera de turno + leyenda (route: inline; JS verificado por sintaxis+integración)
 - [x] T19b — Subir presencia del sombreado en modo claro (route: inline; 2 reglas CSS)
+- [x] T20 — Adelantados: en curso con inicio futuro (route: inline; test-first RED→GREEN)
 - [x] T13 — Paleta en-curso del Timeline, solo visual (route: inline; 1 archivo)
 
 ## Acceptance criteria
@@ -125,6 +127,8 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T17 done: explorado `horarios_importados_2026_10.json` (calendario mensual, datetimes absolutas, midnight gratis; matching 21/1:1/0 ambiguos + 2 carriles sin persona).
 - 2026-10-07 T18 done: `python/shifts.py` (loader por patrón + match por tokens acotado por familia + segmentos recortados + fuera-de-turno) cableado en `main.py` (lanes por carril + `shiftScope` en diagnóstico) y `window.ResourceShifts` embebido. Pases fuera de turno: solo diagnóstico (anti-basura-visual). RED ImportError → GREEN `pytest 185 passed` + `ruff`. Smoke vivo 23:04: 14/14 carriles, 20 fuera de turno. Commit `8beaf36`.
 - 2026-10-07 T19 done: fondo de carril fuera-de-turno detrás de barras + leyenda de 2 conceptos + tooltips/etiquetas por segmento; paleta exacta pedida + variante dark; carriles sin match sin pintar. `node --check` x2 + `pytest 185 passed` + leyenda/payload incrustados en HTML. Docs: DATA_CONTRACT v1.12 + timeline.md. Commit `b600195`.
+- 2026-10-07 T19b done: sombreado a #F1F5F9 + trama 0.06 en claro (el slate-50 se perdía).
+- 2026-10-08 T20 done: `earlyStart` (en curso con INI futuro) con tarjeta `Pases adelantados` + drawer + scopes por grupo + diagnóstico + reporte. RED ImportError → GREEN `pytest 195 passed` + `ruff` + `node --check`. Smoke vivo 00:00: OCD-231277 pescado. Docs: DATA_CONTRACT v1.13 + README 6 cards/drawers.
 - 2026-10-07 T13 done: `.timeline__bar--pase-en-curso` con paleta exacta del diseño (fondo #ECFDF3 + diagonal 0.035 + outline #86D7A3 + acento izq 4px #16A34A vía background + texto #166534). Todo hacia adentro: dimensiones mapeadas intactas. Badge `.badge--pase-en-curso` y demás estados sin tocar. `pytest 165 passed` + `node --check` x2 + paleta verificada en el HTML generado.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 

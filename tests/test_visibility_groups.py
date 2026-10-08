@@ -372,6 +372,7 @@ def test_each_group_publishes_the_four_action_ticket_sets():
             "ratificationsExpired",
             "inFlightNow",
             "staleInFlight",
+            "earlyStart",
         }, group["id"]
 
 

@@ -152,6 +152,7 @@ Current groups, all three emitted unconditionally:
 | `passesInWindow` | array of string | Tickets with a row in the 8h window, for this group. |
 | `inFlightNow` | array of string | Tickets `Pase en curso` with `INI_IMPL <= updatedAt <= FIN_IMPL`, for this group. The headline KPI card reads this scope, not the window. |
 | `staleInFlight` | array of string | Tickets `Pase en curso` with `FIN_IMPL < updatedAt`, for this group. Invisible everywhere else (timeline/table/drawers) — they get their own `Pases fuera de ventana` card + drawer. |
+| `earlyStart` | array of string | Tickets `Pase en curso` with `INI_IMPL > updatedAt`, for this group. Started early (or misloaded estado) — own `Pases adelantados` card + drawer. |
 | `lateStarts` | array of string | Tickets whose `_late_start` flag is set, for this group. |
 | `ratificationsSoon` | array of string | Tickets whose `_ratification_soon` flag is set. |
 | `ratificationsExpired` | array of string | Tickets whose `_ratification_expired` flag is set. |
@@ -475,6 +476,7 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.13 | 2026-10-07 | **Adelantados scope** (caso OCD-231277: ejecutado antes de su slot). `window.ChangeOpsActions` y `tickets` por grupo ganan `earlyStart`: pases `Pase en curso` con `INI_IMPL` futuro. Tarjeta `Pases adelantados` + drawer propios. |
 | v1.12 | 2026-10-07 | **Turnos por carril** (T19). `window.ResourceShifts` sombrean fuera-de-turno por responsable (payload separado, NO contrato) + `shiftScope` en diagnóstico con pases fuera de turno. Sin archivo de turnos: sin sombreado. |
 | v1.11 | 2026-10-07 | **Real dates on bars** (T15). `timeline[].bars[]` gains `iniPlan`/`finPlan` (real `DD/MM HH:MM`) so the detail drawer shows planned dates, never clipped geometry. Additive, no geometry change. |
 | v1.10 | 2026-10-07 | **Timeline overlap scope** (ADR-014). El Timeline dibuja filas que solapan la ventana (inicio adentro, o inicio previo con FIN válido pasado su borde), recortadas a la grilla. Solo geometría: reglas, KPIs y tabla intactos. |

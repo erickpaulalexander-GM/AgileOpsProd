@@ -41,7 +41,7 @@ from config import (
 )
 import renderer as renderer_mod
 from excel_reader import read_excel
-from renderer import build_actions, filter_in_flight, filter_stale_in_flight, render_dashboard
+from renderer import build_actions, filter_early_start, filter_in_flight, filter_stale_in_flight, render_dashboard
 from kpi import update_contract_kpis, update_contract_visibility_kpis
 from rules import apply_rules, collect_conflicts, filter_operational, is_terminal
 from shifts import (
@@ -299,6 +299,10 @@ def main(
     rows_stale = filter_stale_in_flight(rows_all, anchor_dt)
     logger.info("Stale in-flight (Fuera de ventana): %d", len(rows_stale))
 
+    # T20: Adelantados = en curso con INI futuro (caso OCD-231277).
+    rows_early = filter_early_start(rows_all, anchor_dt)
+    logger.info("Early start (Adelantados): %d", len(rows_early))
+
     # T18: Turnos por carril — sombreado fuera de turno + pases anómalos.
     # Sin archivo o con archivo roto: degradado (sin sombreado), nunca crash.
     shifts_pattern = str(cfg.get("shifts", {}).get("file", SHIFT_FILE_PATTERN))
@@ -357,6 +361,7 @@ def main(
         rows_timeline,
         in_flight_rows=rows_in_flight,
         stale_in_flight_rows=rows_stale,
+        early_start_rows=rows_early,
     )
 
     # Step 7: Build action payload (ADR-008) and the diagnostic report
@@ -365,6 +370,7 @@ def main(
         rows_timeline,
         in_flight_rows=rows_in_flight,
         stale_in_flight_rows=rows_stale,
+        early_start_rows=rows_early,
     )
     operational_rows = filter_operational(rows_all)  # ADR-006
     conflicts = collect_conflicts(rows_all)          # only non-terminal pairs
@@ -461,6 +467,7 @@ def main(
                 "passesInWindow": len(actions["passesInWindow"]),
                 "inFlightNow": len(actions["inFlightNow"]),
                 "staleInFlight": len(actions["staleInFlight"]),
+                "earlyStart": len(actions["earlyStart"]),
                 "lateStarts": len(actions["lateStarts"]),
                 "ratificationsSoon": len(actions["ratificationsSoon"]),
                 "ratificationsExpired": len(actions["ratificationsExpired"]),
@@ -575,6 +582,7 @@ def _print_report(
         print(f"    Pases en ventana                    : {ap.get('passesInWindow', 0)}")
         print(f"    Pases en curso (volando ahora)       : {ap.get('inFlightNow', 0)}")
         print(f"    Pases fuera de ventana (FIN pasado)  : {ap.get('staleInFlight', 0)}")
+        print(f"    Pases adelantados (INI futuro)       : {ap.get('earlyStart', 0)}")
         print(f"    Pases atrasados                     : {ap.get('lateStarts', 0)}")
         print(f"    Ratificaciones por vencer           : {ap.get('ratificationsSoon', 0)}")
         print(f"    Ratificaciones vencidas             : {ap.get('ratificationsExpired', 0)}")

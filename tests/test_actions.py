@@ -34,6 +34,7 @@ def test_payload_keys():
         "ratificationsExpired",
         "inFlightNow",
         "staleInFlight",
+        "earlyStart",
     }
 
 
