@@ -78,6 +78,7 @@ Out:
 - [x] T17 — Turnos en Timeline: explorar JSON + identidad de recurso
 - [x] T18 — Turnos backend: loader+matcher+payload (route: inline; test-first RED→GREEN)
 - [x] T19 — Turnos frontend: sombreado fuera de turno + leyenda (route: inline; JS verificado por sintaxis+integración)
+- [x] T19b — Subir presencia del sombreado en modo claro (route: inline; 2 reglas CSS)
 - [x] T13 — Paleta en-curso del Timeline, solo visual (route: inline; 1 archivo)
 
 ## Acceptance criteria

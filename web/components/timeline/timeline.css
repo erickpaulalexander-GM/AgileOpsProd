@@ -254,11 +254,13 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  background-color: #F8FAFC;
+  /* T19b: slate-100 de fondo — el slate-50 anterior se perdia contra el lane.
+     Sigue mas tenue que cualquier barra. */
+  background-color: #F1F5F9;
   background-image: repeating-linear-gradient(
     135deg,
-    rgba(100, 116, 139, 0.035) 0px,
-    rgba(100, 116, 139, 0.035) 2px,
+    rgba(100, 116, 139, 0.06) 0px,
+    rgba(100, 116, 139, 0.06) 2px,
     transparent 2px,
     transparent 8px
   );

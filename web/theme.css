@@ -372,11 +372,11 @@ body {
 }
 
 .timeline-legend__swatch--off {
-  background-color: #F8FAFC;
+  background-color: #F1F5F9;
   background-image: repeating-linear-gradient(
     135deg,
-    rgba(100, 116, 139, 0.035) 0px,
-    rgba(100, 116, 139, 0.035) 2px,
+    rgba(100, 116, 139, 0.06) 0px,
+    rgba(100, 116, 139, 0.06) 2px,
     transparent 2px,
     transparent 8px
   );
