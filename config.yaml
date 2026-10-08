@@ -10,6 +10,10 @@ excel:
   pattern: "ControlPases*.xlsx"
   sheet: 0
 
+shifts:
+  # Patron dentro de input_dir (el mas nuevo manda). Sin match: sin sombreado.
+  file: "horarios_importados_*.json"
+
 app:
   name: "AgileOps Prod Console"
   timezone: "America/Lima"

@@ -27,6 +27,9 @@ DEFAULTS: dict[str, Any] = {
         "pattern": "ControlPases*.xlsx",
         "sheet": 0,
     },
+    "shifts": {
+        "file": "horarios_importados_*.json",
+    },
     "app": {
         "name": "AgileOps Prod Console",
         "timezone": "America/Lima",
@@ -52,6 +55,10 @@ def _with_defaults(data: dict[str, Any]) -> dict[str, Any]:
         "excel": {
             **DEFAULTS["excel"],
             **(data.get("excel") or {}),
+        },
+        "shifts": {
+            **DEFAULTS["shifts"],
+            **(data.get("shifts") or {}),
         },
         "app": {
             **DEFAULTS["app"],

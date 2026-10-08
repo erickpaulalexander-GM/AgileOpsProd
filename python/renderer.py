@@ -165,6 +165,7 @@ def render_dashboard(
     actions: dict[str, Any] | None = None,
     output_dir: str | Path | None = None,
     dashboard_title: str | None = None,
+    resource_shifts: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     """
     Generate all output files.
@@ -175,6 +176,7 @@ def render_dashboard(
         actions: Optional window.ChangeOpsActions payload (ADR-008)
         output_dir: Override for OUTPUT_DIR (config paths.output_dir)
         dashboard_title: Override for DASHBOARD_TITLE (config app.name)
+        resource_shifts: Optional lane-shift payload (T18, window.ResourceShifts)
 
     Returns:
         dict with output file paths
@@ -208,7 +210,14 @@ def render_dashboard(
 
     # 3. Generate dashboard.html (template + inline data)
     html_path = out / "dashboard.html"
-    _generate_html(contract, actions, html_path, title=title, source=source)
+    _generate_html(
+        contract,
+        actions,
+        html_path,
+        title=title,
+        source=source,
+        resource_shifts=resource_shifts,
+    )
     logger.info(f"Written: {html_path}")
 
     return {
@@ -224,6 +233,7 @@ def _generate_html(
     output_path: Path,
     title: str = DASHBOARD_TITLE,
     source: dict[str, Any] | None = None,
+    resource_shifts: dict[str, Any] | None = None,
 ) -> None:
     """
     Generate a self-contained dashboard.html.
@@ -265,6 +275,13 @@ def _generate_html(
     data_script += (
         '<script>window.AgileOpsSource = '
         + json.dumps(source or {}, ensure_ascii=False)
+        + ';</script>\n'
+    )
+
+    # T18: separate, non-contract lane-shift payload (fuera-de-turno shading).
+    data_script += (
+        '<script>window.ResourceShifts = '
+        + json.dumps(resource_shifts or {}, ensure_ascii=False)
         + ';</script>\n'
     )
 

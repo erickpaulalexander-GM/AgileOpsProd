@@ -44,6 +44,13 @@ from excel_reader import read_excel
 from renderer import build_actions, filter_in_flight, filter_stale_in_flight, render_dashboard
 from kpi import update_contract_kpis, update_contract_visibility_kpis
 from rules import apply_rules, collect_conflicts, filter_operational, is_terminal
+from shifts import (
+    SHIFT_FILE_PATTERN,
+    build_lane_shifts,
+    collect_out_of_shift,
+    find_shifts_file,
+    load_shifts,
+)
 
 # Repository root — this module lives in <root>/python/. Resolving the default
 # input from here (not from the CWD) makes the pipeline runnable from anywhere.
@@ -292,6 +299,37 @@ def main(
     rows_stale = filter_stale_in_flight(rows_all, anchor_dt)
     logger.info("Stale in-flight (Fuera de ventana): %d", len(rows_stale))
 
+    # T18: Turnos por carril — sombreado fuera de turno + pases anómalos.
+    # Sin archivo o con archivo roto: degradado (sin sombreado), nunca crash.
+    shifts_pattern = str(cfg.get("shifts", {}).get("file", SHIFT_FILE_PATTERN))
+    shifts_path = find_shifts_file(Path(cfg["paths"]["input_dir"]), shifts_pattern)
+    shifts_people: list = []
+    shifts_source = "none"
+    if shifts_path is not None:
+        try:
+            shifts_people = load_shifts(shifts_path)["people"]
+            shifts_source = str(shifts_path)
+        except (OSError, ValueError, KeyError) as exc:
+            logger.warning("Turnos no cargados (%s); sin sombreado", exc)
+    lane_shifts = build_lane_shifts(
+        rows_timeline, shifts_people, window["start"], window["end"]
+    )
+    out_of_shift = collect_out_of_shift(rows_all, shifts_people)
+    matched_lanes = sum(
+        1
+        for lanes in lane_shifts.values()
+        for lane in lanes.values()
+        if lane["matched"]
+    )
+    total_lanes = sum(len(lanes) for lanes in lane_shifts.values())
+    logger.info(
+        "Shift lanes: %d/%d matched (%s); out-of-shift: %d",
+        matched_lanes,
+        total_lanes,
+        shifts_source,
+        len(out_of_shift),
+    )
+
     # Step 5: Convert to Data Contract v1.
     #   - Timeline scope: overlapping rows (T14, clipped geometry).
     #   - Table scope: the full in-scope pool operational universe.
@@ -427,6 +465,17 @@ def main(
                 "ratificationsSoon": len(actions["ratificationsSoon"]),
                 "ratificationsExpired": len(actions["ratificationsExpired"]),
             },
+            "shiftScope": {
+                "description": (
+                    "Turnos por carril (T18): carriles matcheados y pases "
+                    "fuera de todo turno (anomalia, solo diagnostico)"
+                ),
+                "shiftsFile": shifts_source,
+                "lanesMatched": matched_lanes,
+                "lanesTotal": total_lanes,
+                "outOfShift": len(out_of_shift),
+                "outOfShiftTickets": out_of_shift,
+            },
         }
     )
 
@@ -437,6 +486,7 @@ def main(
         actions,
         output_dir=output_dir,
         dashboard_title=app_name,
+        resource_shifts=lane_shifts,
     )
 
     _print_report(contract, diagnostic, output_paths)
@@ -533,6 +583,12 @@ def _print_report(
     for name, path in output_paths.items():
         print(f"    {name:<20} : {path}")
     print(line)
+    ss = diagnostic.get("shiftScope", {})
+    if ss:
+        print(f"  Turnos ({ss.get('shiftsFile', 'none')}): "
+              f"{ss.get('lanesMatched', 0)}/{ss.get('lanesTotal', 0)} carriles, "
+              f"{ss.get('outOfShift', 0)} pases fuera de turno")
+        print(line)
     print("  Pool order (meta.poolOrder, emitido por Python): "
           f"{', '.join(contract['meta']['poolOrder'])}")
     groups = (contract.get("meta") or {}).get("visibilityGroups") or []

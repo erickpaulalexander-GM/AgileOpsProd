@@ -85,6 +85,9 @@ excel:
 app:
   name: "AgileOps Prod Console"
   timezone: "America/Lima"        # wall-clock; --now still wins for replays
+shifts:
+  file: "horarios_importados_*.json"  # newest match inside input_dir wins;
+                                      # missing file = no lane shading, warn only
 ```
 
 Precedence: CLI `excel_path` > config > built-in defaults. Missing
