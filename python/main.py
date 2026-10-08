@@ -11,8 +11,9 @@ diagnostic report ONLY and never anchors the window. A run can be reproduced
 exactly with ``--now "YYYY-MM-DD HH:MM"``.
 
 TWO SCOPES (explicit):
-  - Timeline scope : only bars whose implementation start is inside the
-                     dynamic 8h window. Feeds timeline + table.
+  - Timeline scope : rows overlapping the dynamic 8h window — starts inside,
+                     or started before with a valid FIN past the window edge
+                     (T14, drawn clipped). Feeds timeline + table.
   - KPI scope      : the in-scope pool set (column_map), one row per record,
                      NO dedup, evaluated with meta.updatedAt as the temporal
                      reference, and with TERMINAL states excluded (ADR-006).
@@ -273,7 +274,8 @@ def main(
     #         reference (meta.updatedAt) — this is the KPI scope.
     rows_all = apply_rules(rows_all, reference_now=window["updated_at"])
 
-    # Step 4: Timeline scope = only rows whose impl start is inside the window.
+    # Step 4: Timeline scope = rows overlapping the window (starts inside,
+    #         or started before with proven overlap — T14 clipped in-flight).
     #         (These share the same dict objects, so rule flags carry over.)
     rows_timeline, bars_outside = filter_to_window(rows_all, window)
 
@@ -283,13 +285,15 @@ def main(
     rows_in_flight = filter_in_flight(rows_all, anchor_dt)
     logger.info("In-flight now (Pases en curso): %d", len(rows_in_flight))
 
-    # T6: Colgados = en curso con FIN pasado. Invisibles en timeline, tabla
-    # y drawers (salvo rati vencida de casualidad): indicador propio.
+    # T6: Colgados = en curso con FIN pasado. Fuera de tabla y drawers
+    # (salvo rati vencida de casualidad); en timeline solo como recorte si
+    # solapan su borde izquierdo (T14). El drawer propio sigue siendo el
+    # lugar para accionarlos.
     rows_stale = filter_stale_in_flight(rows_all, anchor_dt)
     logger.info("Stale in-flight (Fuera de ventana): %d", len(rows_stale))
 
     # Step 5: Convert to Data Contract v1.
-    #   - Timeline scope: in-window rows.
+    #   - Timeline scope: overlapping rows (T14, clipped geometry).
     #   - Table scope: the full in-scope pool operational universe.
     contract = to_contract(
         rows_timeline,
@@ -364,7 +368,7 @@ def main(
             "excelSheet": sheet,
             "excelPattern": str(cfg.get("excel", {}).get("pattern", "")),
             "timelineScope": {
-                "description": "Bars whose impl start is inside the dynamic 8h window",
+                "description": "Bars overlapping the dynamic 8h window (starts inside, or started before with valid FIN past its edge — T14, drawn clipped)",
                 "barsInWindow": len(rows_timeline),
                 "barsOutsideWindow": bars_outside,
                 "ticketsInTimeline": sum(len(p["bars"]) for p in contract["timeline"]),

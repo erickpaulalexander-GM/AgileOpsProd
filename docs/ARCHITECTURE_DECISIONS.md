@@ -794,10 +794,39 @@ keep the ADR-009 treatment, so the change is deliberately asymmetric.
 5. **Bar type unchanged.** Derivado rows keep `type: "derivado"` (dashed
    frame) inside their own row — lane and type stay orthogonal.
 
-### How to prove it
+### How to prove it (historical — asserted while the split lived)
 
 ```powershell
 .\.venv-win\Scripts\python.exe -m pytest tests/test_pool_scope.py tests/test_timeline_grouping.py tests/test_visibility_groups.py -q
 #   poolOrder has 5 entries; ORO-Derivado resolves to its own family;
 #   the agileops group owns 3 families; the whitelist still holds 8 values
+```
+
+## ADR-014 The timeline draws overlap, not just window starts
+
+At the operator's request: lane occupancy must read NOW. A pass that started
+before the 8h window but is still alive at its left edge is drawn clipped to
+that edge (`start: 0`, visible duration), so a resource working a pass never
+looks free. This reverses nothing — ADR-012's anchor and single reference
+stand; only the timeline's *membership* widens from starts-inside to overlap.
+
+### Decision
+
+1. **Overlap, proven.** `filter_to_window()` keeps a pre-window row only with
+   a valid `FIN_IMPL` past the window start. No valid FIN = no provable
+   overlap = out, the same rule T6 uses for colgados.
+2. **Clip in the backend.** `_compute_start_duration()` clips both edges to
+   `[0, 480]`; the frontend receives valid geometry and does not change.
+   Rows, flags, KPIs and the table are untouched — same dict objects, only
+   the bar dict carries clipped minutes.
+3. **Stale rows may clip too.** An `en curso` row with FIN between the window
+   start and now renders as a sliver at the left edge. That is correct lane
+   information (it just finished); the stale drawer stays the action point.
+
+### How to prove it
+
+```powershell
+.\.venv-win\Scripts\python.exe -m pytest tests/test_window_overlap.py -q
+#   pre-window alive -> drawn clipped; spanning -> full grid; finished/
+#   missing-FIN/future -> out; in-window geometry byte-identical
 ```

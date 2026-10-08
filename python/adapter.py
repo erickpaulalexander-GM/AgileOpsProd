@@ -93,7 +93,12 @@ def filter_to_window(
     window: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], int]:
     """
-    Keep only rows whose implementation START falls inside the window (ADR-012).
+    Keep rows that overlap the window (ADR-012 window, T14 overlap scope).
+
+    A row is kept when its implementation START falls inside the window
+    (status quo) OR when it started before the window but proves overlap
+    with a valid FIN past the window start (T14: lanes read occupied NOW).
+    Without a valid FIN there is no provable overlap, so the row drops out.
 
     Returns:
         (kept_rows, dropped_count)
@@ -106,7 +111,14 @@ def filter_to_window(
 
     for row in rows:
         inicio = row.get("inicio_impl")
-        if isinstance(inicio, datetime) and start <= inicio < end:
+        if not isinstance(inicio, datetime):
+            dropped += 1
+            continue
+        if start <= inicio < end:
+            kept.append(row)
+            continue
+        fin = row.get("fin_impl")
+        if inicio < start and _is_valid_dt(fin) and fin > start:
             kept.append(row)
         else:
             dropped += 1
@@ -425,6 +437,8 @@ def _compute_start_duration(
     (can be negative for out-of-window rows); duration is the real one.
 
     Returns None if the row is invalid or the duration is non-positive.
+    T14: a row started before the window but still alive at its left edge is
+    drawn clipped (start 0, visible duration) so lane occupancy reads NOW.
     """
     inicio_impl = row.get("inicio_impl")
     fin_impl = row.get("fin_impl")
@@ -440,12 +454,15 @@ def _compute_start_duration(
         return None
 
     if enforce_window:
-        if start_min < 0 or start_min >= WINDOW_MINUTES:
+        if start_min >= WINDOW_MINUTES:
             return None
-        if start_min + duration > WINDOW_MINUTES:  # clip to grid
-            duration = WINDOW_MINUTES - start_min
-        if duration <= 0:
+        # Clip both edges to the grid: a pre-window start lands on 0 and an
+        # overflowing end lands on 480. A row with nothing visible drops out.
+        visible_start = max(0, start_min)
+        visible_end = min(start_min + duration, WINDOW_MINUTES)
+        if visible_end <= visible_start:
             return None
+        return visible_start, visible_end - visible_start
 
     return start_min, duration
 

@@ -387,7 +387,9 @@ Entries in `diagnostic_report.json` are worth watching after any change:
   drives the window.
 
 Both are scoped differently from each other on purpose: the **timeline** shows
-the 8-hour slice, the **table** shows the live operational universe, and the
+the 8-hour window including passes that started before it but are still
+overlapping (drawn clipped to the left edge, T14), the **table** shows the
+live operational universe, and the
 **KPIs** run over the in-scope set with terminal states excluded (ADR-006). A
 number that looks inconsistent between the three is usually that difference, not
 a bug.

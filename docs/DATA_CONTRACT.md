@@ -201,8 +201,14 @@ tickets.
 
 ### `timeline[]`
 
-One element per pool **that has at least one bar in the window**. Groups with no
+One element per pool **with at least one visible bar**. Groups with no
 bars are omitted entirely (`python/adapter.py::to_contract`).
+
+Timeline scope (T14, ADR-014): a row is drawn when it **overlaps** the 8h
+window — its start falls inside, or it started before and proves overlap
+with a valid `FIN_IMPL` past the window start. Without a valid FIN there is
+no provable overlap, so the row stays out. Pre-window rows render clipped
+to the left edge (`start: 0`, visible duration).
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -236,7 +242,6 @@ change:
 | `S&F` | `sf` | `--color-sf` | `#7C3AED` / `#A78BFA` | `.badge--sf` |
 | `AgileOps ORO` | `agileops-oro` | `--color-agileops-oro` | `#1D4ED8` / `#38BDF8` | `.badge--agileops-oro` |
 | `AgileOps Prod` | `agileops-prod` | `--color-agileops-prod` | `#BE185D` / `#F472B6` | `.badge--agileops-prod` |
-| `AgileOps Prod` | `agileops-prod` | `--color-agileops-prod` | `#BE185D` / `#F472B6` | `.badge--agileops-prod` |
 | *(no pool)* | `unknown` | `--bg-hover` | `var(--border-strong)` | *(no rule — falls back to the base `.badge`)* |
 
 `pool.toLowerCase()` is **not** sufficient: `S&F` contains `&` and
@@ -253,8 +258,8 @@ so the badge class can never drift from the bar token.
 | `ticket` | string | Ticket ID (e.g. `"MVPAGIPROD-251005"`). Also the bar label rendered on screen. |
 | `name` | string | `NOMBRE APP`, truncated to 50 chars. Shown in the bar's `title` tooltip. |
 | `type` | string | `"implementacion"` or `"derivado"` — **the `type` axis, not the pool identity** (see below) |
-| `start` | number | Integer minutes from `windowStart` (ADR-004). Always in `[0, 480)`. |
-| `duration` | number | Integer minutes. Clipped so `start + duration <= 480`. |
+| `start` | number | Integer minutes from `windowStart` (ADR-004). Always in `[0, 480)` — pre-window rows are clipped to the left edge (`0`). |
+| `duration` | number | Integer minutes **visible on the grid**. Clipped so `start + duration <= 480`. |
 | `status` | string | `"coordinado"`, `"pase-en-curso"` or `"inicio-atrasado"` |
 
 > **A bar has no `pool` field.** The pool is carried **only** by the enclosing
@@ -466,6 +471,7 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.10 | 2026-10-07 | **Timeline overlap scope** (ADR-014). El Timeline dibuja filas que solapan la ventana (inicio adentro, o inicio previo con FIN válido pasado su borde), recortadas a la grilla. Solo geometría: reglas, KPIs y tabla intactos. |
 | v1.9 | 2026-10-07 | **ORO Derivado vuelve a tipo de barra** (T12 revierte T10/ADR-013 a pedido del cliente: los carriles deben leerse igual que los demás pools). Enum 5 → 4; los 4 filtros del T11 quedan (`oro` owns ORO). |
 | v1.8 | 2026-10-07 | **Cuarto filtro** (pedido del cliente). Grupos 3 → 4: `oro` (`AgileOps ORO`, ORO + ORO Derivado) y `prod` (`AgileOps Prod`); `agileops` deja de existir (el `localStorage` viejo cae al default `yape` por diseño). |
 | v1.7 | 2026-10-07 | **ORO Derivado split** (ADR-013, partial exception to ADR-009). `pool` enum grows 4 → 5: `AgileOps ORO Derivado` is its own family with token `agileops-oro-derivado`; `meta.poolOrder` carries 5 entries; the `agileops` visibility group owns 3 families. Other `-DERIVADO` variants stay bar type. |
