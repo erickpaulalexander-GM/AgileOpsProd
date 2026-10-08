@@ -40,7 +40,7 @@ from rules import apply_rules
 EXPECTED_GROUPS = [
     ("yape", "YAPE", ["Yape"]),
     ("sf", "S&F", ["S&F"]),
-    ("agileops", "AgileOps", ["AgileOps ORO", "AgileOps Prod"]),
+    ("agileops", "AgileOps", ["AgileOps ORO", "AgileOps ORO Derivado", "AgileOps Prod"]),
 ]
 
 # The 8 in-scope RECURSO values, verbatim from the workbook (ADR-009).
@@ -118,7 +118,11 @@ def test_each_group_family_list_is_correct():
     projected = {g["id"]: g for g in visibility_groups()}
     assert projected["yape"]["families"] == ["Yape"]
     assert projected["sf"]["families"] == ["S&F"]
-    assert projected["agileops"]["families"] == ["AgileOps ORO", "AgileOps Prod"]
+    assert projected["agileops"]["families"] == [
+        "AgileOps ORO",
+        "AgileOps ORO Derivado",
+        "AgileOps Prod",
+    ]
 
 
 def test_first_group_is_the_default_candidate():
@@ -245,7 +249,7 @@ def test_contract_publishes_the_groups_with_zero_bars_in_the_window():
 
 
 def test_pool_order_is_untouched_by_the_grouping():
-    """The 4 families and their display order are NOT collapsed into groups."""
+    """The 5 families and their display order are NOT collapsed into groups."""
     window = compute_window(REFERENCE)
     contract = to_contract([], {}, window)
     assert contract["meta"]["poolOrder"] == list(POOL_FAMILY_ORDER)

@@ -6,7 +6,7 @@ tests pin:
 
 - the exact-match whitelist (8 RECURSO values) — a substring implementation
   must NOT pass, so AUTOMATIZADO / AUTOMATIZADO ITSM / INFRAESTRUCTURA stay out;
-- the ordered family resolution to the 4 display pools;
+- the ordered family resolution to the 5 display pools;
 - the whitelist and the family table agree with each other;
 - meta.poolOrder is emitted from Python even with zero bars in the window.
 """
@@ -63,7 +63,13 @@ def test_scope_has_exactly_eight_resource_values():
 
 
 def test_pool_order_is_the_canonical_display_order():
-    assert POOL_FAMILY_ORDER == ("Yape", "S&F", "AgileOps ORO", "AgileOps Prod")
+    assert POOL_FAMILY_ORDER == (
+        "Yape",
+        "S&F",
+        "AgileOps ORO",
+        "AgileOps ORO Derivado",
+        "AgileOps Prod",
+    )
 
 
 def test_normalization_folds_case_and_removes_all_whitespace():
@@ -148,7 +154,7 @@ def test_family_resolution_for_all_eight_values():
         "Pool S&F": "S&F",
         "POOL S&F-DERIVADO": "S&F",
         "Pool AgileOps ORO": "AgileOps ORO",
-        "Pool AgileOps ORO - Derivado": "AgileOps ORO",
+        "Pool AgileOps ORO - Derivado": "AgileOps ORO Derivado",
         "Pool AgileOps Prod": "AgileOps Prod",
         "Pool AgileOps Prod - Derivado": "AgileOps Prod",
     }
@@ -159,7 +165,7 @@ def test_family_resolution_for_all_eight_values():
 def test_family_resolution_is_whitespace_and_case_insensitive():
     assert get_pool_name("POOL S&F-DERIVADO") == "S&F"
     assert get_pool_name("  pool   s&f  ") == "S&F"
-    assert get_pool_name("Pool AgileOps ORO - Derivado") == "AgileOps ORO"
+    assert get_pool_name("Pool AgileOps ORO - Derivado") == "AgileOps ORO Derivado"
     assert get_pool_name("POOLAGILEOPSORO") == "AgileOps ORO"
     assert get_pool_name("pool   agileops   prod-derivado") == "AgileOps Prod"
 
@@ -203,15 +209,27 @@ def test_meta_pool_order_is_emitted_in_display_order():
     ]
     window = compute_window(datetime(2026, 9, 11, 8, 30))
     contract = to_contract(rows, {}, window)
-    assert contract["meta"]["poolOrder"] == ["Yape", "S&F", "AgileOps ORO", "AgileOps Prod"]
+    assert contract["meta"]["poolOrder"] == [
+        "Yape",
+        "S&F",
+        "AgileOps ORO",
+        "AgileOps ORO Derivado",
+        "AgileOps Prod",
+    ]
 
 
 def test_meta_pool_order_lists_all_families_with_zero_bars():
-    """All 4 names are emitted even when no pool has bars in the window."""
+    """All 5 names are emitted even when no pool has bars in the window."""
     window = compute_window(datetime(2026, 9, 11, 8, 30))
     contract = to_contract([], {}, window)
     assert contract["timeline"] == []
-    assert contract["meta"]["poolOrder"] == ["Yape", "S&F", "AgileOps ORO", "AgileOps Prod"]
+    assert contract["meta"]["poolOrder"] == [
+        "Yape",
+        "S&F",
+        "AgileOps ORO",
+        "AgileOps ORO Derivado",
+        "AgileOps Prod",
+    ]
 
 
 # ---------------------------------------------------------------
@@ -273,10 +291,16 @@ def test_grouping_never_admits_an_out_of_scope_value():
         assert get_visibility_group(recurso) == "", recurso
 
 
-def test_pool_family_order_still_declares_four_families():
-    """Grouping must not collapse the 4 families into 3 display pools."""
-    assert POOL_FAMILY_ORDER == ("Yape", "S&F", "AgileOps ORO", "AgileOps Prod")
-    assert len(POOL_FAMILY_ORDER) == 4
+def test_pool_family_order_still_declares_five_families():
+    """Grouping must not collapse the 5 families into 3 display pools."""
+    assert POOL_FAMILY_ORDER == (
+        "Yape",
+        "S&F",
+        "AgileOps ORO",
+        "AgileOps ORO Derivado",
+        "AgileOps Prod",
+    )
+    assert len(POOL_FAMILY_ORDER) == 5
 
 
 def test_group_table_declares_families_not_resource_literals():

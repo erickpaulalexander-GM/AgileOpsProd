@@ -747,3 +747,44 @@ python python\main.py
 #   diagnostic.updatedAtSource = run_clock
 #   diagnostic.excelFileMtime = the workbook's mtime (diagnostic only)
 ```
+
+## ADR-013 AgileOps ORO Derivado is its own pool
+
+**Partial exception to ADR-009, at the client's request.** ADR-009 stays the
+rule — every other `-DERIVADO` variant remains bar type, never pool — but
+`Pool AgileOps ORO - Derivado` now resolves to its own family,
+`AgileOps ORO Derivado`, with its own timeline row, right after `AgileOps ORO`.
+
+### Why
+
+Operators read ORO and ORO-Derivado as separate lanes, the way Yape and S&F
+are separate rows. Merging 32 + 39 rows into one ORO row hid the lane they
+work in. Only ORO splits: S&F-Derivado, Prod-Derivado (and Yape-Derivado)
+keep the ADR-009 treatment, so the change is deliberately asymmetric.
+
+### Decision
+
+1. **One table row.** `_POOL_FAMILY_RESOURCES` gains
+   `("AgileOps ORO Derivado", ("Pool AgileOps ORO - Derivado",))` between ORO
+   and Prod. Position is display order: `meta.poolOrder` now carries 5
+   entries and the timeline renders 5 rows. Inclusion is untouched — the same
+   8 `RECURSO` values, so scope counts (571 in the reference workbook) do
+   not move.
+2. **Token before base.** `_FAMILY_TOKENS` checks `AGILEOPSORODERIVADO`
+   before `AGILEOPSORO` (exact-table hits never reach the fallback, but an
+   unknown spelling variant must not collapse onto the base family).
+3. **Same group.** The `agileops` visibility group owns the new family, so
+   the partition invariant holds and no pool goes dark in any view.
+4. **Full token set.** `agileops-oro-derivado` gets `--color-*` +
+   `--pool-accent-*` (light + dark), `.badge--*`, `.timeline__pool-header--*`
+   and `.timeline__bar--*`, exactly like any family per `timeline.md`.
+5. **Bar type unchanged.** Derivado rows keep `type: "derivado"` (dashed
+   frame) inside their own row — lane and type stay orthogonal.
+
+### How to prove it
+
+```powershell
+.\.venv-win\Scripts\python.exe -m pytest tests/test_pool_scope.py tests/test_timeline_grouping.py tests/test_visibility_groups.py -q
+#   poolOrder has 5 entries; ORO-Derivado resolves to its own family;
+#   the agileops group owns 3 families; the whitelist still holds 8 values
+```

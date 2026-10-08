@@ -99,7 +99,10 @@ DATE_COLUMNS = [
 _POOL_FAMILY_RESOURCES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Yape", ("POOL - YAPE", "POOL - YAPE-DERIVADO")),
     ("S&F", ("Pool S&F", "POOL S&F-DERIVADO")),
-    ("AgileOps ORO", ("Pool AgileOps ORO", "Pool AgileOps ORO - Derivado")),
+    ("AgileOps ORO", ("Pool AgileOps ORO",)),
+    # T10 (pedido del cliente): ORO Derivado es pool propio, como Yape y S&F.
+    # Las demas variantes -DERIVADO siguen siendo tipo de barra, no pool.
+    ("AgileOps ORO Derivado", ("Pool AgileOps ORO - Derivado",)),
     ("AgileOps Prod", ("Pool AgileOps Prod", "Pool AgileOps Prod - Derivado")),
 )
 
@@ -144,10 +147,12 @@ _RESOURCE_TO_FAMILY: dict[str, str] = {
 # Ordered loose tokens, used for FAMILY RESOLUTION ONLY — never for inclusion.
 # AGILEOPSORO / AGILEOPSPROD are strictly longer than AGILEOPS and are
 # evaluated in family order, so resolution never collapses onto "AGILEOPS"
-# alone and can never steal one family from another.
+# alone and can never steal one family from another. The DERIVADO token
+# goes BEFORE its base family: "…ORO-DERIVADO" contains "AGILEOPSORO".
 _FAMILY_TOKENS: tuple[tuple[str, str], ...] = (
     ("Yape", "YAPE"),
     ("S&F", "S&F"),
+    ("AgileOps ORO Derivado", "AGILEOPSORODERIVADO"),
     ("AgileOps ORO", "AGILEOPSORO"),
     ("AgileOps Prod", "AGILEOPSPROD"),
 )
@@ -186,10 +191,12 @@ def get_pool_name(recurso: Any) -> str:
 
     "POOL - YAPE"                          → "Yape"
     "Pool S&F" / "POOL S&F-DERIVADO"        → "S&F"   (one family, no space)
-    "Pool AgileOps ORO - Derivado"         → "AgileOps ORO"
-    "Pool AgileOps Prod"                   → "AgileOps Prod"
+    "Pool AgileOps ORO"                     → "AgileOps ORO"
+    "Pool AgileOps ORO - Derivado"          → "AgileOps ORO Derivado"  (T10)
+    "Pool AgileOps Prod"                    → "AgileOps Prod"
 
-    The DERIVADO distinction stays in get_bar_type(), NOT in the pool name.
+    The DERIVADO distinction stays in get_bar_type(), NOT in the pool name —
+    except "Pool AgileOps ORO - Derivado", which is its own family (T10).
     """
     key = normalize_recurso(recurso)
     if not key:
@@ -231,9 +238,9 @@ def get_pool_name(recurso: Any) -> str:
 _VISIBILITY_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("yape", "YAPE", ("Yape",)),
     ("sf", "S&F", ("S&F",)),
-    # One group over two existing families — expressed as family names so the
+    # One group over three existing families — expressed as family names so the
     # definition cannot drift from the pool table above.
-    ("agileops", "AgileOps", ("AgileOps ORO", "AgileOps Prod")),
+    ("agileops", "AgileOps", ("AgileOps ORO", "AgileOps ORO Derivado", "AgileOps Prod")),
 )
 
 

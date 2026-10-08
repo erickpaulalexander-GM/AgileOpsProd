@@ -48,6 +48,7 @@ en un selector de clase.
 | `Yape` | `yape` | `#B45309` | `#FB923C` | `--color-yape` `#F6E7A7` |
 | `S&F` | `sf` | `#7C3AED` | `#A78BFA` | `--color-sf` `#E6D7FF` |
 | `AgileOps ORO` | `agileops-oro` | `#1D4ED8` | `#38BDF8` | `--color-agileops-oro` `#BFDBFE` |
+| `AgileOps ORO Derivado` | `agileops-oro-derivado` | `#0F766E` | `#2DD4BF` | `--color-agileops-oro-derivado` `#CCFBF1` |
 | `AgileOps Prod` | `agileops-prod` | `#BE185D` | `#F472B6` | `--color-agileops-prod` `#FBCFE8` |
 | (sin pool) | `unknown` | `var(--border-strong)` | `var(--border-strong)` | `var(--bg-hover)` |
 
@@ -61,7 +62,7 @@ para light, otra para dark) y `timeline.css` solo liga token → token:
 El acento pinta el borde de 3 px y el punto de 8 px del encabezado de pool
 (`.timeline__pool-dot` usa `background: var(--pool-accent)`, sin estilo inline).
 Se declara por tema porque un acento oscuro es invisible sobre `--bg-surface`
-en dark: los cuatro superan 3:1 en ambos temas.
+en dark: todos superan 3:1 en ambos temas.
 
 El relleno de barra es siempre el tono claro `--color-*` y **no** se re-declara
 para dark, porque el texto de la barra es oscuro (`rgba(0,0,0,.7)`): así la

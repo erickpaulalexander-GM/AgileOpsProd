@@ -259,18 +259,20 @@ AgileOpsProd/
 
 ## Pool families
 
-The timeline has **4 pool rows**. The `-DERIVADO` resource variants are the bar
-**type**, never a separate pool.
+The timeline has **5 pool rows**. The `-DERIVADO` resource variants are the bar
+**type**, never a separate pool — except `Pool AgileOps ORO - Derivado`, which
+is its own pool since T10 (ADR-013) at the client's request.
 
 | # | Pool (`pool` field) | CSS token | Matching `RECURSO` values | Rows in the current workbook |
 |---|---------------------|-----------|---------------------------|------------------------------|
 | 1 | `Yape` | `yape` | `POOL - YAPE`, `POOL - YAPE-DERIVADO` | 8 + 0 |
 | 2 | `S&F` | `sf` | `Pool S&F`, `POOL S&F-DERIVADO` | 59 + 47 |
-| 3 | `AgileOps ORO` | `agileops-oro` | `Pool AgileOps ORO`, `Pool AgileOps ORO - Derivado` | 32 + 39 |
-| 4 | `AgileOps Prod` | `agileops-prod` | `Pool AgileOps Prod`, `Pool AgileOps Prod - Derivado` | 231 + 155 |
+| 3 | `AgileOps ORO` | `agileops-oro` | `Pool AgileOps ORO` | 32 |
+| 4 | `AgileOps ORO Derivado` | `agileops-oro-derivado` | `Pool AgileOps ORO - Derivado` | 39 |
+| 5 | `AgileOps Prod` | `agileops-prod` | `Pool AgileOps Prod`, `Pool AgileOps Prod - Derivado` | 231 + 155 |
 | | | | **Total in scope** | **571** |
 
-Display order is fixed at `Yape → S&F → AgileOps ORO → AgileOps Prod`, published
+Display order is fixed at `Yape → S&F → AgileOps ORO → AgileOps ORO Derivado → AgileOps Prod`, published
 by Python as `meta.poolOrder` and consumed by the web layer.
 
 Of the 1432 data rows in the workbook, **571 are in scope and 861 are ignored**.
@@ -306,7 +308,7 @@ not have to read the other families' passes.
 |---|------|-------|---------------|---------|
 | 1 | `yape` | YAPE | `Yape` | **yes** |
 | 2 | `sf` | S&F | `S&F` | no |
-| 3 | `agileops` | AgileOps | `AgileOps ORO`, `AgileOps Prod` | no |
+| 3 | `agileops` | AgileOps | `AgileOps ORO`, `AgileOps ORO Derivado`, `AgileOps Prod` | no |
 
 Switching a group re-renders **everything**: the timeline, the operational table,
 the four KPI cards and the three action drawers. The active group and its record
