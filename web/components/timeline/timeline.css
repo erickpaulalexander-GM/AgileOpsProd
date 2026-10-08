@@ -299,8 +299,26 @@
 
 /* Status modifiers */
 .timeline__bar--pase-en-curso {
-  background: var(--color-success);
-  color: #FFFFFF;
+  /* T13 (pedido del cliente, solo visual): verde muy claro con textura
+     diagonal casi imperceptible y acento lateral izquierdo. Todo se pinta
+     HACIA ADENTRO (fondos + outline) para no mover ni 1px las dimensiones
+     mapeadas a duracion — misma regla que .timeline__bar--derivado. El texto
+     hereda centrado/negrita/tamano de .timeline__bar. */
+  background-color: #ECFDF3;
+  background-image:
+    linear-gradient(to right, #16A34A 0 4px, transparent 4px),
+    repeating-linear-gradient(
+      135deg,
+      rgba(22, 163, 74, 0.035) 0px,
+      rgba(22, 163, 74, 0.035) 2px,
+      transparent 2px,
+      transparent 8px
+    );
+  background-size: 4px 100%, auto;
+  background-repeat: no-repeat;
+  outline: 1px solid #86D7A3;
+  outline-offset: -1px;
+  color: #166534;
 }
 
 .timeline__bar--inicio-atrasado {
