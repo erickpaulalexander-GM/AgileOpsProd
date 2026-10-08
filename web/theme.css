@@ -340,15 +340,15 @@ body {
 .timeline-legend {
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 18px;
   flex-wrap: wrap;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--card-radius);
   box-shadow: var(--shadow-sm);
-  padding: 10px 20px;
-  margin-bottom: 12px;
-  font-size: 12px;
+  padding: 6px 16px;
+  margin-bottom: 8px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
 
@@ -365,8 +365,8 @@ body {
 }
 
 .timeline-legend__swatch {
-  width: 46px;
-  height: 20px;
+  width: 38px;
+  height: 16px;
   border-radius: 4px;
   flex-shrink: 0;
 }
@@ -397,7 +397,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--card-radius);
-  padding: 16px 20px;
+  padding: 10px 16px;
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
@@ -419,7 +419,7 @@ body {
 }
 
 .kpi-card__value {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.1;
 }

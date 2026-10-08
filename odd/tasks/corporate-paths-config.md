@@ -81,6 +81,7 @@ Out:
 - [x] T19 — Turnos frontend: sombreado fuera de turno + leyenda (route: inline; JS verificado por sintaxis+integración)
 - [x] T19b — Subir presencia del sombreado en modo claro (route: inline; 2 reglas CSS)
 - [x] T20 — Adelantados: en curso con inicio futuro (route: inline; test-first RED→GREEN)
+- [x] T21 — Compactar tarjetas KPI + leyenda (route: inline; solo CSS/HTML)
 - [x] T13 — Paleta en-curso del Timeline, solo visual (route: inline; 1 archivo)
 
 ## Acceptance criteria
