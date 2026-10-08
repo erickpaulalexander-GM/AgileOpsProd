@@ -367,7 +367,9 @@ web/dashboard.js  +  web/components/timeline/timeline.js
 The HTML is self-contained: all CSS and JS are inlined and the contract is
 embedded as `window.MockOperations.data`. `window.ChangeOpsActions` (ADR-008) is
 embedded alongside it as a **separate, non-contract** informational payload; it
-must not be read as part of Data Contract v1.
+must not be read as part of Data Contract v1. `window.ResourceShifts` (T19) is
+embedded the same way: `{pool: {responsable: {matched, fuera: [[start, end]]}}`
+in grid minutes, plus the header source stamp — none of it is contract.
 
 ---
 
@@ -473,6 +475,7 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.12 | 2026-10-07 | **Turnos por carril** (T19). `window.ResourceShifts` sombrean fuera-de-turno por responsable (payload separado, NO contrato) + `shiftScope` en diagnóstico con pases fuera de turno. Sin archivo de turnos: sin sombreado. |
 | v1.11 | 2026-10-07 | **Real dates on bars** (T15). `timeline[].bars[]` gains `iniPlan`/`finPlan` (real `DD/MM HH:MM`) so the detail drawer shows planned dates, never clipped geometry. Additive, no geometry change. |
 | v1.10 | 2026-10-07 | **Timeline overlap scope** (ADR-014). El Timeline dibuja filas que solapan la ventana (inicio adentro, o inicio previo con FIN válido pasado su borde), recortadas a la grilla. Solo geometría: reglas, KPIs y tabla intactos. |
 | v1.9 | 2026-10-07 | **ORO Derivado vuelve a tipo de barra** (T12 revierte T10/ADR-013 a pedido del cliente: los carriles deben leerse igual que los demás pools). Enum 5 → 4; los 4 filtros del T11 quedan (`oro` owns ORO). |

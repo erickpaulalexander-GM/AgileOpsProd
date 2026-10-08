@@ -77,7 +77,7 @@ Out:
 - [x] T16 — Badge en-curso de tabla en verde claro (route: inline; 1 regla CSS)
 - [x] T17 — Turnos en Timeline: explorar JSON + identidad de recurso
 - [x] T18 — Turnos backend: loader+matcher+payload (route: inline; test-first RED→GREEN)
-- [ ] T19 — Turnos frontend: sombreado fuera de turno + leyenda (route: inline)
+- [x] T19 — Turnos frontend: sombreado fuera de turno + leyenda (route: inline; JS verificado por sintaxis+integración)
 - [x] T13 — Paleta en-curso del Timeline, solo visual (route: inline; 1 archivo)
 
 ## Acceptance criteria
@@ -122,7 +122,8 @@ Runner: `pytest -q` (conftest pone `python/` en sys.path). Donde haya test deter
 - 2026-10-07 T16 done: `.badge--pase-en-curso` a fondo #DCFCE7 + texto #15803D + borde #86EFAC (tamaño/padding/radius intactos; celdas con slack de 8px). Timeline T13 ya tenía la paleta pedida — verificado en el HTML. `pytest 173 passed` + paleta TIMELINE+BADGE en el HTML generado.
 - 2026-10-07 T16 done: `.badge--pase-en-curso` a fondo #DCFCE7 + texto #15803D + borde #86EFAC (tamaño/padding/radius intactos; celdas con slack). Timeline T13 ya tenía la paleta pedida — verificado. `pytest 173 passed` + paleta en HTML. Timeline: barras ligeras; tabla: badge compacto.
 - 2026-10-07 T17 done: explorado `horarios_importados_2026_10.json` (calendario mensual, datetimes absolutas, midnight gratis; matching 21/1:1/0 ambiguos + 2 carriles sin persona).
-- 2026-10-07 T18 done: `python/shifts.py` (loader por patrón + match por tokens acotado por familia + segmentos recortados + fuera-de-turno) cableado en `main.py` (lanes por carril + `shiftScope` en diagnóstico) y `window.ResourceShifts` embebido. Pases fuera de turno: solo diagnóstico (anti-basura-visual). RED ImportError → GREEN `pytest 185 passed` + `ruff`. Smoke vivo 23:04: 14/14 carriles, 20 fuera de turno.
+- 2026-10-07 T18 done: `python/shifts.py` (loader por patrón + match por tokens acotado por familia + segmentos recortados + fuera-de-turno) cableado en `main.py` (lanes por carril + `shiftScope` en diagnóstico) y `window.ResourceShifts` embebido. Pases fuera de turno: solo diagnóstico (anti-basura-visual). RED ImportError → GREEN `pytest 185 passed` + `ruff`. Smoke vivo 23:04: 14/14 carriles, 20 fuera de turno. Commit `8beaf36`.
+- 2026-10-07 T19 done: fondo de carril fuera-de-turno detrás de barras + leyenda de 2 conceptos + tooltips/etiquetas por segmento; paleta exacta pedida + variante dark; carriles sin match sin pintar. `node --check` x2 + `pytest 185 passed` + leyenda/payload incrustados en HTML. Docs: DATA_CONTRACT v1.12 + timeline.md.
 - 2026-10-07 T13 done: `.timeline__bar--pase-en-curso` con paleta exacta del diseño (fondo #ECFDF3 + diagonal 0.035 + outline #86D7A3 + acento izq 4px #16A34A vía background + texto #166534). Todo hacia adentro: dimensiones mapeadas intactas. Badge `.badge--pase-en-curso` y demás estados sin tocar. `pytest 165 passed` + `node --check` x2 + paleta verificada en el HTML generado.
 - Verificación hasta acá: `git status` limpio; `git branch` main → nueva rama ok.
 

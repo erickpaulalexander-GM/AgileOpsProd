@@ -337,6 +337,56 @@ body {
 }
 
 /* ----------------------------------------------  kpi cards  */
+.timeline-legend {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-sm);
+  padding: 10px 20px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.timeline-legend__title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.timeline-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.35;
+}
+
+.timeline-legend__swatch {
+  width: 46px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.timeline-legend__swatch--off {
+  background-color: #F8FAFC;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(100, 116, 139, 0.035) 0px,
+    rgba(100, 116, 139, 0.035) 2px,
+    transparent 2px,
+    transparent 8px
+  );
+  border: 1px solid var(--border-color);
+}
+
+.timeline-legend__swatch--free {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
 .kpi-section {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--kpi-card-min-width), 1fr));
