@@ -22,6 +22,9 @@ workspace/output/*
 # Source workbook is provided externally and is not versioned here
 workspace/input/*.xlsx
 
+# Monthly shift rosters are provided externally, like the workbook
+workspace/input/horarios_importados_*.json
+
 # OS / editor noise
 .DS_Store
 Thumbs.db

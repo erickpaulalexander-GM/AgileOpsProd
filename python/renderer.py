@@ -23,14 +23,89 @@ logger = logging.getLogger(__name__)
 
 # Paths — resolved from the repository root so the pipeline runs from any CWD.
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Estado que cuenta como "en vuelo": el pase se esta ejecutando ahora mismo
+# (T5, pedido del cliente). Comparacion normalizada como la tabla.
+IN_FLIGHT_STATE = "pase en curso"
+
+
+def _norm_estado(value: Any) -> str:
+    """Lowercase + whitespace colapsado para comparar estados."""
+    return " ".join(str(value or "").split()).lower()
+
+
+def is_in_flight_now(row: dict[str, Any], reference: datetime) -> bool:
+    """True si el pase se ejecuta en `reference`: en curso y cubriendolo.
+
+    Subconjunto de la tabla operativa (mismo universo: estados activos +
+    trabajo vivo), restringido a estado en curso ya iniciado. Las fechas
+    ausentes/invalidas no cuentan — igual que la tabla, que exige ambas.
+    """
+    if _norm_estado(row.get("estado")) != IN_FLIGHT_STATE:
+        return False
+    inicio = row.get("inicio_impl")
+    fin = row.get("fin_impl")
+    if not isinstance(inicio, datetime) or not isinstance(fin, datetime):
+        return False
+    return inicio <= reference <= fin
+
+
+def filter_in_flight(
+    rows: list[dict[str, Any]], reference: datetime
+) -> list[dict[str, Any]]:
+    """Pases en vuelo sobre el universo operativo (ver is_in_flight_now)."""
+    return [r for r in rows if is_in_flight_now(r, reference)]
+
+
+def is_stale_in_flight(row: dict[str, Any], reference: datetime) -> bool:
+    """True si el pase quedo colgado en curso con el FIN ya pasado.
+
+    T6: son los tickets fantasma — fuera de timeline (inicio viejo), fuera
+    de tabla (fin pasado) y fuera de drawers, salvo ratificacion vencida
+    de casualidad. Sin FIN valido no se juzga: no se puede probar pasado.
+    """
+    if _norm_estado(row.get("estado")) != IN_FLIGHT_STATE:
+        return False
+    fin = row.get("fin_impl")
+    if not isinstance(fin, datetime):
+        return False
+    return fin < reference
+
+
+def filter_stale_in_flight(
+    rows: list[dict[str, Any]], reference: datetime
+) -> list[dict[str, Any]]:
+    """Pases colgados en curso (ver is_stale_in_flight)."""
+    return [r for r in rows if is_stale_in_flight(r, reference)]
+
+
+def is_early_start(row: dict[str, Any], reference: datetime) -> bool:
+    """True si el pase figura en curso pero todavia no debio empezar.
+
+    T20 (caso OCD-231277): solo puede ser adelanto o estado mal cargado.
+    Sin INI valido no se juzga.
+    """
+    if _norm_estado(row.get("estado")) != IN_FLIGHT_STATE:
+        return False
+    inicio = row.get("inicio_impl")
+    if not isinstance(inicio, datetime):
+        return False
+    return inicio > reference
+
+
+def filter_early_start(
+    rows: list[dict[str, Any]], reference: datetime
+) -> list[dict[str, Any]]:
+    """Pases adelantados (ver is_early_start)."""
+    return [r for r in rows if is_early_start(r, reference)]
 WEB_DIR = REPO_ROOT / "web"
 TEMPLATE_PATH = WEB_DIR / "dashboard_template.html"
 OUTPUT_DIR = REPO_ROOT / "workspace" / "output"
 
 # The <title> in web/dashboard_template.html replaced below. Both strings must
 # stay byte-identical: renderer.py substitutes it with the app name + updatedAt.
-TEMPLATE_TITLE_TAG = "<title>AgileOps Prod Console</title>"
-DASHBOARD_TITLE = "AgileOps Prod Console"
+TEMPLATE_TITLE_TAG = "<title>Pases AgileOps</title>"
+DASHBOARD_TITLE = "Pases AgileOps"
 
 
 def _fmt_dt(dt: Any) -> str:
@@ -72,16 +147,28 @@ def _action_record(row: dict[str, Any], kind: str) -> dict[str, Any]:
 def build_actions(
     rows_r1: list[dict[str, Any]],
     rows_in_window: list[dict[str, Any]],
+    in_flight_rows: list[dict[str, Any]] | None = None,
+    stale_in_flight_rows: list[dict[str, Any]] | None = None,
+    early_start_rows: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Build the window.ChangeOpsActions payload (ADR-008).
 
     No business rules are added here: the lists are derived from the rule
     flags already computed by rules.py (`_late_start`, `_ratification_soon`,
-    `_ratification_expired`).
+    `_ratification_expired`) — except `inFlightNow` (T5 en-vuelo scope),
+    `staleInFlight` (T6 colgados) and `earlyStart` (T20 adelantados), all
+    precomputed by the caller over the operational universe.
     """
     return {
         "passesInWindow": [_action_record(r, "impl") for r in rows_in_window],
+        "inFlightNow": [_action_record(r, "impl") for r in (in_flight_rows or [])],
+        "staleInFlight": [
+            _action_record(r, "impl") for r in (stale_in_flight_rows or [])
+        ],
+        "earlyStart": [
+            _action_record(r, "impl") for r in (early_start_rows or [])
+        ],
         "lateStarts": [
             _action_record(r, "impl") for r in rows_r1 if r.get("_late_start")
         ],
@@ -100,6 +187,9 @@ def render_dashboard(
     contract: dict[str, Any],
     diagnostic: dict[str, Any],
     actions: dict[str, Any] | None = None,
+    output_dir: str | Path | None = None,
+    dashboard_title: str | None = None,
+    resource_shifts: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     """
     Generate all output files.
@@ -108,14 +198,26 @@ def render_dashboard(
         contract: Data Contract v1
         diagnostic: Processing statistics
         actions: Optional window.ChangeOpsActions payload (ADR-008)
+        output_dir: Override for OUTPUT_DIR (config paths.output_dir)
+        dashboard_title: Override for DASHBOARD_TITLE (config app.name)
+        resource_shifts: Optional lane-shift payload (T18, window.ResourceShifts)
 
     Returns:
         dict with output file paths
     """
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out = Path(output_dir) if output_dir is not None else OUTPUT_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    title = dashboard_title or DASHBOARD_TITLE
+
+    # T8: sello del archivo fuente para el header (frescura). Payload
+    # separado, NO contrato: el contrato sigue sin campo mtime.
+    source = {
+        "file": str(diagnostic.get("excelFileName", "") or ""),
+        "mtime": str(diagnostic.get("excelFileMtime", "") or ""),
+    }
 
     # 1. Write dashboard_data.json
-    data_path = OUTPUT_DIR / "dashboard_data.json"
+    data_path = out / "dashboard_data.json"
     data_path.write_text(
         json.dumps(contract, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -123,7 +225,7 @@ def render_dashboard(
     logger.info(f"Written: {data_path}")
 
     # 2. Write diagnostic_report.json
-    diag_path = OUTPUT_DIR / "diagnostic_report.json"
+    diag_path = out / "diagnostic_report.json"
     diag_path.write_text(
         json.dumps(diagnostic, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -131,8 +233,15 @@ def render_dashboard(
     logger.info(f"Written: {diag_path}")
 
     # 3. Generate dashboard.html (template + inline data)
-    html_path = OUTPUT_DIR / "dashboard.html"
-    _generate_html(contract, actions, html_path)
+    html_path = out / "dashboard.html"
+    _generate_html(
+        contract,
+        actions,
+        html_path,
+        title=title,
+        source=source,
+        resource_shifts=resource_shifts,
+    )
     logger.info(f"Written: {html_path}")
 
     return {
@@ -146,6 +255,9 @@ def _generate_html(
     contract: dict[str, Any],
     actions: dict[str, Any] | None,
     output_path: Path,
+    title: str = DASHBOARD_TITLE,
+    source: dict[str, Any] | None = None,
+    resource_shifts: dict[str, Any] | None = None,
 ) -> None:
     """
     Generate a self-contained dashboard.html.
@@ -183,6 +295,20 @@ def _generate_html(
             + ';</script>\n'
         )
 
+    # T8: separate, non-contract source stamp (header frescura).
+    data_script += (
+        '<script>window.AgileOpsSource = '
+        + json.dumps(source or {}, ensure_ascii=False)
+        + ';</script>\n'
+    )
+
+    # T18: separate, non-contract lane-shift payload (fuera-de-turno shading).
+    data_script += (
+        '<script>window.ResourceShifts = '
+        + json.dumps(resource_shifts or {}, ensure_ascii=False)
+        + ';</script>\n'
+    )
+
     # Replace external resource references with inlined content
     html = template
 
@@ -213,7 +339,7 @@ def _generate_html(
     # Update title
     html = html.replace(
         TEMPLATE_TITLE_TAG,
-        f'<title>{DASHBOARD_TITLE} — {contract["meta"]["updatedAt"]}</title>',
+        f'<title>{title} — {contract["meta"]["updatedAt"]}</title>',
     )
     if TEMPLATE_TITLE_TAG in html:
         logger.warning(

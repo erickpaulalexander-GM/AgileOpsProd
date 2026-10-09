@@ -43,6 +43,16 @@
   --color-danger: #DC2626;
   --color-conflict: #EA580C;
 
+  /* A8: own colour for the "Coordinado" status badge. Deliberately NOT a
+     pool colour (it used to reuse --color-yape). Neutral slate + border. */
+  --color-coordinado-bg: #E2E8F0;
+  --color-coordinado-text: #334155;
+  --color-coordinado-border: #94A3B8;
+
+  /* A1: text on the amber (--color-warning) fill of the "Inicio atrasado"
+     badge and bar. Dark text, ~6.8:1; white was ~2.1:1. */
+  --text-on-warning: #1F2937;
+
   /* Layout */
   --content-max-width: 1600px;
   --content-padding: 16px;
@@ -68,7 +78,21 @@
 
   --text-primary: #0F172A;
   --text-secondary: #475569;
-  --text-muted: #94A3B8;
+  --text-muted: #64748B;
+
+  /* A1: darker TEXT variants for KPI values (fills/borders keep the
+     --color-* tokens). All >= 4.5:1 on #FFFFFF. */
+  --text-success: #15803D;
+  --text-warning: #B45309;
+  --text-danger: #DC2626;
+
+  /* A8: severity scale (text colour of KPI values). */
+  --severity-neutral: var(--text-primary);
+  --severity-attention: var(--text-warning);
+  --severity-critical: var(--text-danger);
+
+  /* A3: keyboard focus ring. */
+  --focus-ring: #1D4ED8;
 
   --border-color: #E2E8F0;
   --border-strong: #CBD5E1;
@@ -100,7 +124,20 @@
 
   --text-primary: #F1F5F9;
   --text-secondary: #CBD5E1;
-  --text-muted: #64748B;
+  --text-muted: #94A3B8;
+
+  /* A1: text variants on the dark surface (#1E293B), all >= 5:1. */
+  --text-success: #4ADE80;
+  --text-warning: #FBBF24;
+  --text-danger: #F87171;
+
+  /* A8: severity scale (text colour of KPI values). */
+  --severity-neutral: var(--text-primary);
+  --severity-attention: var(--text-warning);
+  --severity-critical: var(--text-danger);
+
+  /* A3: keyboard focus ring. */
+  --focus-ring: #60A5FA;
 
   --border-color: #334155;
   --border-strong: #475569;
@@ -135,6 +172,13 @@ body {
   color: var(--text-primary);
   background: var(--bg-body);
   -webkit-font-smoothing: antialiased;
+}
+
+/* A3: global keyboard focus ring (bars, KPI cards, theme toggle, drawer
+   close, links). The pool <select> keeps its own, more specific rule. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* ----------------------------------------------------------  layout  */
@@ -238,13 +282,33 @@ body {
 /* Accent left-border per group token — the active group is unmistakable. */
 .pool-group__badge--yape     { border-left-color: var(--pool-accent-yape); }
 .pool-group__badge--sf       { border-left-color: var(--pool-accent-sf); }
-.pool-group__badge--agileops { border-left-color: var(--pool-accent-agileops-prod); }
+.pool-group__badge--oro      { border-left-color: var(--pool-accent-agileops-oro); }
+.pool-group__badge--prod     { border-left-color: var(--pool-accent-agileops-prod); }
 
 .pool-group__counts {
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
+  /* Fixed footprint: the text length varies per group (digits, plural), and the
+     topbar-meta is right-aligned, so a variable width shifts the whole header. */
+  display: inline-block;
+  min-width: 46ch;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stable widths: switching group must not move the header. Sized for the
+   longest group label ("AgileOps Prod"). */
+.pool-group__select {
+  width: 18ch;
+  min-width: 18ch;
+}
+
+.pool-group__badge {
+  box-sizing: border-box;
+  display: inline-block;
+  min-width: 17ch;
+  text-align: center;
 }
 
 /* ----------------------------------------------  zero-result states (ADR-011)
@@ -279,6 +343,14 @@ body {
   text-align: center;
   color: var(--text-muted);
   font-style: italic;
+}
+
+/* A12: visible load-error banner. Reuses the neutral .timeline-empty look
+   (markup carries both classes); only adds the card framing. */
+.load-error {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-sm);
 }
 
 /* ----------------------------------------------  theme toggle  */
@@ -322,7 +394,124 @@ body {
   color: var(--color-danger);
 }
 
+/* T9 — source stamp: red + bold only when the file is stale (>30 min). */
+.source-stamp--stale {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.source-stamp--stale .sync-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
 /* ----------------------------------------------  kpi cards  */
+.timeline-legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-sm);
+  padding: 6px 16px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.timeline-legend__title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.timeline-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.35;
+}
+
+.timeline-legend__swatch {
+  width: 38px;
+  height: 16px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.timeline-legend__swatch--off {
+  background-color: #F1F5F9;
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(100, 116, 139, 0.06) 0px,
+    rgba(100, 116, 139, 0.06) 2px,
+    transparent 2px,
+    transparent 8px
+  );
+  border: 1px solid var(--border-color);
+}
+
+/* A9: theme-aware, mirrors .timeline__offshift in timeline.css. */
+[data-theme="dark"] .timeline-legend__swatch--off {
+  background-color: rgba(100, 116, 139, 0.14);
+  background-image: repeating-linear-gradient(
+    135deg,
+    rgba(148, 163, 184, 0.05) 0px,
+    rgba(148, 163, 184, 0.05) 2px,
+    transparent 2px,
+    transparent 8px
+  );
+}
+
+/* A9: compact legend swatches for pool, status, derivado and conflict. */
+.timeline-legend__swatch--compact {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.timeline-legend__pools {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.timeline-legend__swatch--yape { background: var(--color-yape); }
+.timeline-legend__swatch--sf   { background: var(--color-sf); }
+.timeline-legend__swatch--oro  { background: var(--color-agileops-oro); }
+.timeline-legend__swatch--prod { background: var(--color-agileops-prod); }
+
+.timeline-legend__swatch--en-curso {
+  background-color: #ECFDF3;
+  background-image: linear-gradient(to right, #16A34A 0 4px, transparent 4px);
+  outline: 1px solid #86D7A3;
+  outline-offset: -1px;
+}
+
+.timeline-legend__swatch--atrasado {
+  background: var(--color-warning);
+  border: 2px solid var(--color-conflict);
+}
+
+.timeline-legend__swatch--derivado {
+  background: var(--bg-surface-alt);
+  outline: 1.5px dashed var(--text-secondary);
+  outline-offset: -3px;
+  border: 1px solid var(--border-color);
+}
+
+.timeline-legend__conflict {
+  color: var(--color-conflict);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.timeline-legend__swatch--free {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
 .kpi-section {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(var(--kpi-card-min-width), 1fr));
@@ -333,7 +522,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--card-radius);
-  padding: 16px 20px;
+  padding: 10px 16px;
   box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
@@ -355,15 +544,21 @@ body {
 }
 
 .kpi-card__value {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.1;
 }
 
-.kpi-card--positive .kpi-card__value { color: var(--color-success); }
-.kpi-card--negative .kpi-card__value { color: var(--color-danger);  }
+/* A1: value TEXT uses the darker --text-* tokens; fills/borders untouched.
+   A8: severity classes (neutral / attention / critical) drive the colour. */
+.kpi-card--positive .kpi-card__value { color: var(--text-success); }
+.kpi-card--negative .kpi-card__value { color: var(--text-danger);  }
 .kpi-card--neutral  .kpi-card__value { color: var(--text-primary);  }
-.kpi-card--warning  .kpi-card__value { color: var(--color-warning); }
+.kpi-card--warning  .kpi-card__value { color: var(--text-warning); }
+
+.kpi-card--severity-neutral   .kpi-card__value { color: var(--severity-neutral); }
+.kpi-card--severity-attention .kpi-card__value { color: var(--severity-attention); }
+.kpi-card--severity-critical  .kpi-card__value { color: var(--severity-critical); }
 
 /* ----------------------------------------------  timeline  */
 .timeline-section {
@@ -447,18 +642,24 @@ body {
 
 /* Status badges */
 .badge--coordinado {
-  background: var(--color-yape);
-  color: #78350F;
+  /* A8: own tokens, distinct from the Yape pool colour. */
+  background: var(--color-coordinado-bg);
+  color: var(--color-coordinado-text);
+  border: 1px solid var(--color-coordinado-border);
 }
 
 .badge--pase-en-curso {
-  background: var(--color-success);
-  color: #FFFFFF;
+  /* T16 (pedido del cliente, solo visual): badge compacto legible —
+     fondo claro + borde + texto verde. Tamano/padding/radius intactos
+     (heredados de .badge); el borde de 1px cabe en el padding de celda. */
+  background: #DCFCE7;
+  color: #15803D;
+  border: 1px solid #86EFAC;
 }
 
 .badge--inicio-atrasado {
   background: var(--color-warning);
-  color: #FFFFFF;
+  color: var(--text-on-warning);
   border-left: 3px solid var(--color-conflict);
 }
 

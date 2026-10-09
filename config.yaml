@@ -1,0 +1,19 @@
+# AgileOps Prod Console — paths configurables para la PC corporativa.
+# Rutas relativas = contra la raiz del repo (ADR-010). Absolutas = tal cual.
+environment: DEV
+
+paths:
+  input_dir: workspace/input
+  output_dir: workspace/output
+
+excel:
+  pattern: "ControlPases*.xlsx"
+  sheet: 0
+
+shifts:
+  # Patron dentro de input_dir (el mas nuevo manda). Sin match: sin sombreado.
+  file: "horarios_importados_*.json"
+
+app:
+  name: "Pases AgileOps"
+  timezone: "America/Lima"

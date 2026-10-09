@@ -27,7 +27,15 @@ def _row(ticket, **kw):
 
 def test_payload_keys():
     a = build_actions([], [])
-    assert set(a) == {"passesInWindow", "lateStarts", "ratificationsSoon", "ratificationsExpired"}
+    assert set(a) == {
+        "passesInWindow",
+        "lateStarts",
+        "ratificationsSoon",
+        "ratificationsExpired",
+        "inFlightNow",
+        "staleInFlight",
+        "earlyStart",
+    }
 
 
 def test_required_fields_present():

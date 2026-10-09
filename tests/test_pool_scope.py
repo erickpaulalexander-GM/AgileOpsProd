@@ -240,7 +240,7 @@ def test_adapter_source_does_not_duplicate_the_pool_list():
 # Visibility groups sit ON TOP of the whitelist (ADR-011), never instead of it
 # ---------------------------------------------------------------
 def test_grouping_does_not_widen_inclusion():
-    """The 3 groups are a partition of the whitelist, never an extension of it.
+    """The 4 groups are a partition of the whitelist, never an extension of it.
 
     The groups are declared as FAMILIES, so they cannot smuggle in a resource
     value: `resources` is flattened from the family table, and every in-scope
@@ -274,7 +274,7 @@ def test_grouping_never_admits_an_out_of_scope_value():
 
 
 def test_pool_family_order_still_declares_four_families():
-    """Grouping must not collapse the 4 families into 3 display pools."""
+    """Grouping must not collapse the 4 families into fewer display pools."""
     assert POOL_FAMILY_ORDER == ("Yape", "S&F", "AgileOps ORO", "AgileOps Prod")
     assert len(POOL_FAMILY_ORDER) == 4
 

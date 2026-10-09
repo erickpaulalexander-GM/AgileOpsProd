@@ -145,6 +145,9 @@ window.Timeline = (function () {
           status: bar.status,
           start: bar.start,         // minutes from window start (ADR-004)
           duration: bar.duration,   // minutes (ADR-004)
+          // T15: real planned dates (clipped geometry must never pose as data)
+          iniPlan: bar.iniPlan,
+          finPlan: bar.finPlan,
           pool: group.pool,         // pool family, from meta.poolOrder
           responsable: _responsableFor(bar.ticket),
         });
@@ -247,7 +250,8 @@ window.Timeline = (function () {
         html += '<div class="timeline__row" style="height:' + rowH + 'px">'
           + '<div class="timeline__row-label" title="' + _esc(group.responsable) + '">'
           + _esc(group.responsable) + '</div>'
-          + '<div class="timeline__row-lane">';
+          + '<div class="timeline__row-lane">'
+          + _offShiftHtml(poolName, group.responsable);
 
         var barHeight = (rowH - gap * 2 - gap * (maxDepth - 1)) / maxDepth;
 
@@ -320,6 +324,50 @@ window.Timeline = (function () {
    * Keys are the pool names published in meta.poolOrder, in any order;
    * _poolOrder drives the iteration.
    */
+  /* =========================================================
+     T19: OFF-SHIFT LANE SHADING from window.ResourceShifts (backend payload).
+     Unmatched lanes and missing payload render nothing (degraded path).
+     Labels render only on wide segments; every segment has a title tooltip.
+     ========================================================= */
+  function _laneShift(pool, responsable) {
+    var RS = (typeof window !== 'undefined') ? window.ResourceShifts : null;
+    if (!RS || !RS[pool] || !RS[pool][responsable]) return null;
+    return RS[pool][responsable];
+  }
+
+  function _offClock(min) {
+    var parts = _contract.meta.windowStart.split(':');
+    var t = (parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + min) % 1440;
+    return _pad(Math.floor(t / 60)) + ':' + _pad(t % 60);
+  }
+
+  function _offLabel(seg) {
+    if (seg[0] <= 0 && seg[1] >= 480) return 'Fuera de turno';
+    if (seg[0] <= 0) return 'Fuera de turno (antes de ' + _offClock(seg[1]) + ')';
+    if (seg[1] >= 480) return 'Fuera de turno (después de ' + _offClock(seg[0]) + ')';
+    return 'Fuera de turno (entre ' + _offClock(seg[0]) + ' y ' + _offClock(seg[1]) + ')';
+  }
+
+  function _offShiftHtml(pool, responsable) {
+    var lane = _laneShift(pool, responsable);
+    if (!lane || !lane.matched || !Array.isArray(lane.fuera)) return '';
+    var out = '';
+    lane.fuera.forEach(function (seg) {
+      var left = seg[0] * CELL_PX / CELL_MIN;
+      var width = (seg[1] - seg[0]) * CELL_PX / CELL_MIN;
+      if (width <= 0) return;
+      var label = _offLabel(seg);
+      out += '<div class="timeline__offshift"'
+        + ' style="left:' + left + 'px;width:' + width + 'px"'
+        + ' title="' + _esc(label) + '">';
+      if (width >= 140) {
+        out += '<span class="timeline__offshift-label">' + _esc(label) + '</span>';
+      }
+      out += '</div>';
+    });
+    return out;
+  }
+
   function _groupByPool(allBars) {
     var byPool = {};
     allBars.forEach(function (bar) {
@@ -521,10 +569,10 @@ window.Timeline = (function () {
    *   5. drop every remaining non [a-z0-9-] character ('&', '.', '/', …)
    *   6. trim leading/trailing '-'
    *
-   *   "Yape"        → "yape"
-   *   "S&F"         → "sf"
-   *   "AgileOps ORO"  → "agileops-oro"
-   *   "AgileOps Prod" → "agileops-prod"
+    *   "Yape"        → "yape"
+    *   "S&F"         → "sf"
+    *   "AgileOps ORO"  → "agileops-oro"
+    *   "AgileOps Prod" → "agileops-prod"
    *
    * dashboard.js reaches this through window.Timeline.poolKey, so the badge
    * class can never drift from the timeline token.

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AgileOps Prod Console</title>
+  <title>Pases AgileOps</title>
   <link rel="stylesheet" href="theme.css">
   <link rel="stylesheet" href="components/timeline/timeline.css">
 </head>
@@ -14,7 +14,7 @@
 
     <!-- HEADER -->
     <header class="topbar">
-      <h1>AgileOps Prod Console</h1>
+      <h1>Pases AgileOps</h1>
       <div class="topbar-meta">
         <!-- ============ POOL VISIBILITY SELECTOR (ADR-011) ============
              Options are populated from meta.visibilityGroups by dashboard.js,
@@ -30,28 +30,80 @@
         </div>
         <span id="sync-indicator" class="sync-indicator" aria-label="Estado de sincronización"></span>
         <span id="last-update">—</span>
+        <span id="source-stamp">—</span>
         <button class="theme-toggle" id="theme-toggle" aria-label="Cambiar tema">🌙</button>
       </div>
     </header>
 
-    <!-- KPI CARDS — 4 slots, populated by dashboard.js -->
+    <!-- A12: load-error banner. Hidden by default; dashboard.js shows it only
+         on the data-null / invalid-contract path. Separate from the
+         zero-result states below (an empty group is never an error). -->
+    <div class="timeline-empty load-error" id="load-error" role="alert" hidden>
+      <p class="timeline-empty__title">No se pudo cargar los datos. Verifica la corrida</p>
+      <p class="timeline-empty__text" id="load-error-detail"></p>
+    </div>
+
+    <!-- KPI CARDS — 5 slots, populated by dashboard.js -->
     <section class="kpi-section" id="kpi-section">
-      <div class="kpi-card kpi-card--neutral" data-kpi="total">
-        <span class="kpi-card__label">Total Pases</span>
+      <div class="kpi-card kpi-card--severity-neutral" data-kpi="total"
+           title="Pases en vuelo (en curso) al momento de la corrida. Informativo.">
+        <span class="kpi-card__label">Pases en curso</span>
         <span class="kpi-card__value" id="kpi-total">—</span>
       </div>
-      <div class="kpi-card kpi-card--positive" data-kpi="coordinados">
+      <div class="kpi-card kpi-card--severity-critical" data-kpi="colgados"
+           title="Pase en curso cuyo fin programado ya venció (fuera de ventana). Crítico.">
+        <span class="kpi-card__label">Pases fuera de ventana</span>
+        <span class="kpi-card__value" id="kpi-colgados">—</span>
+      </div>
+      <div class="kpi-card kpi-card--severity-critical" data-kpi="adelantados"
+           title="Pase que inició antes de su hora programada. Crítico: no se debe adelantar un pase sin conforme del gestor de cambios.">
+        <span class="kpi-card__label">Pases adelantados</span>
+        <span class="kpi-card__value" id="kpi-adelantados">—</span>
+      </div>
+      <div class="kpi-card kpi-card--severity-attention" data-kpi="coordinados"
+           title="Ratificación que inicia en 0 a 10 min (umbral: 10 min). Atención.">
         <span class="kpi-card__label">Coordinados</span>
         <span class="kpi-card__value" id="kpi-coordinados">—</span>
       </div>
-      <div class="kpi-card kpi-card--warning" data-kpi="en-curso">
+      <div class="kpi-card kpi-card--severity-critical" data-kpi="en-curso"
+           title="Ratificación cuyo fin ya pasó respecto del reloj de la corrida. Crítico.">
         <span class="kpi-card__label">En Curso</span>
         <span class="kpi-card__value" id="kpi-en-curso">—</span>
       </div>
-      <div class="kpi-card kpi-card--negative" data-kpi="atrasados">
+      <div class="kpi-card kpi-card--severity-critical" data-kpi="atrasados"
+           title="Pase Coordinado que no inició y pasaron más de 5 min desde su hora de inicio (umbral: 5 min). Crítico.">
         <span class="kpi-card__label">Atrasados</span>
         <span class="kpi-card__value" id="kpi-atrasados">—</span>
       </div>
+    </section>
+
+    <!-- TIMELINE LEGEND — lane states plus (A9) pool, status, derivado, conflict -->
+    <section class="timeline-legend" id="timeline-legend" aria-label="Leyenda del Timeline">
+      <span class="timeline-legend__title">Leyenda del Timeline:</span>
+      <span class="timeline-legend__item">
+        <span class="timeline-legend__swatch timeline-legend__swatch--off" aria-hidden="true"></span>
+        <span><strong>Fuera de turno</strong> — Recurso no disponible</span>
+      </span>
+      <span class="timeline-legend__item">
+        <span class="timeline-legend__swatch timeline-legend__swatch--free" aria-hidden="true"></span>
+        <span><strong>Disponible</strong> — Dentro de turno, sin pase</span>
+      </span>
+      <span class="timeline-legend__item">
+        <span class="timeline-legend__swatch timeline-legend__swatch--en-curso" aria-hidden="true"></span>
+        <span><strong>Pase en curso</strong></span>
+      </span>
+      <span class="timeline-legend__item">
+        <span class="timeline-legend__swatch timeline-legend__swatch--atrasado" aria-hidden="true"></span>
+        <span><strong>Inicio atrasado</strong></span>
+      </span>
+      <span class="timeline-legend__item">
+        <span class="timeline-legend__swatch timeline-legend__swatch--derivado" aria-hidden="true"></span>
+        <span><strong>Derivado</strong> — Borde punteado</span>
+      </span>
+      <span class="timeline-legend__item">
+        <span class="timeline-legend__conflict" aria-hidden="true">⚠</span>
+        <span><strong>Conflicto</strong> — Mismo responsable, horarios solapados</span>
+      </span>
     </section>
 
     <!-- TIMELINE — 60-65 % height, ADR-002 layered grid -->

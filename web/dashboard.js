@@ -91,6 +91,15 @@
   /* =========================================================
      SYNC INDICATOR — shows data freshness
      ========================================================= */
+  // T9: minutos desde el mtime del Excel para marcar fuente desactualizada.
+  var SOURCE_STALE_MIN = 30;
+
+  // T9b: "hace N min" — más corto y más fácil que leer fechas en el topbar.
+  function _haceMin(min) {
+    var n = Math.max(0, Math.round(min));
+    if (n < 1) return 'recién';
+    return 'hace ' + n + ' min';
+  }
   function updateSyncIndicator() {
     var indicatorEl = document.getElementById('sync-indicator');
     var textEl = document.getElementById('last-update');
@@ -111,7 +120,35 @@
     }
 
     // Update text (keep existing format)
-    textEl.textContent = 'Actualización: ' + DATA.meta.updatedAt;
+    textEl.textContent = 'Actualización: ' + _haceMin(diffMin);
+    textEl.title = DATA.meta.updatedAt;
+
+    // T8/T9: source stamp — evidencia el archivo fuente para juzgar frescura.
+    // Relativo ("hace N min"); la fecha exacta queda en el tooltip.
+    // Archivos viejos no traen window.AgileOpsSource: se deja el placeholder.
+    var sourceEl = document.getElementById('source-stamp');
+    var src = (typeof window !== 'undefined') ? window.AgileOpsSource : null;
+    if (sourceEl && src && src.file) {
+      var stamp = 'Fuente: ' + src.file;
+      var ageMin = -1;
+      if (src.mtime) {
+        var mt = new Date(src.mtime).getTime();
+        if (!isNaN(mt)) {
+          ageMin = Math.max(0, Math.round((Date.now() - mt) / 60000));
+          stamp += ' · ' + _haceMin(ageMin);
+          sourceEl.title = 'Archivo del ' + src.mtime;
+        }
+      }
+      sourceEl.textContent = stamp;
+      if (ageMin >= SOURCE_STALE_MIN) {
+        sourceEl.classList.add('source-stamp--stale');
+        sourceEl.title = 'Fuente desactualizada (más de ' +
+          SOURCE_STALE_MIN + ' min): ' + src.mtime;
+        var iconWrap = document.createElement('span');
+        iconWrap.innerHTML = '<svg class="sync-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+        sourceEl.insertBefore(iconWrap.firstChild, sourceEl.firstChild);
+      }
+    }
   }
 
   /* =========================================================
@@ -191,8 +228,8 @@
      readable from devtools. The product owner chose that trade-off; ADR-011
      states the real fix.
 
-     The 3 groups arrive as DATA from Python (meta.visibilityGroups, ADR-009
-     discipline: the web layer hardcodes no group list). Every consumer of
+      The 4 groups arrive as DATA from Python (meta.visibilityGroups, ADR-009
+      discipline: the web layer hardcodes no group list). Every consumer of
      contract.timeline / contract.table / contract.kpis is routed through the
      active group below — see _applyGroup().
      ========================================================= */
@@ -258,7 +295,7 @@
     var tickets = group && group.raw ? group.raw.tickets : null;
     if (!tickets || typeof tickets !== 'object') return null;
     var set = {};
-    ['passesInWindow', 'lateStarts', 'ratificationsSoon', 'ratificationsExpired']
+    ['passesInWindow', 'lateStarts', 'ratificationsSoon', 'ratificationsExpired', 'inFlightNow', 'staleInFlight', 'earlyStart']
       .forEach(function (scope) {
         var list = tickets[scope];
         if (!Array.isArray(list)) return;
@@ -305,6 +342,9 @@
 
     var actions = {
       passesInWindow: ACTIONS && Array.isArray(ACTIONS.passesInWindow) ? ACTIONS.passesInWindow : [],
+      inFlightNow: ACTIONS && Array.isArray(ACTIONS.inFlightNow) ? ACTIONS.inFlightNow : [],
+      staleInFlight: ACTIONS && Array.isArray(ACTIONS.staleInFlight) ? ACTIONS.staleInFlight : [],
+      earlyStart: ACTIONS && Array.isArray(ACTIONS.earlyStart) ? ACTIONS.earlyStart : [],
       lateStarts: ACTIONS && Array.isArray(ACTIONS.lateStarts) ? ACTIONS.lateStarts : [],
       ratificationsSoon: ACTIONS && Array.isArray(ACTIONS.ratificationsSoon) ? ACTIONS.ratificationsSoon : [],
       ratificationsExpired: ACTIONS && Array.isArray(ACTIONS.ratificationsExpired) ? ACTIONS.ratificationsExpired : [],
@@ -313,6 +353,9 @@
       if (_activeTickets) {
         actions = {
           passesInWindow: _filterActionList(actions.passesInWindow),
+          inFlightNow: _filterActionList(actions.inFlightNow),
+          staleInFlight: _filterActionList(actions.staleInFlight),
+          earlyStart: _filterActionList(actions.earlyStart),
           lateStarts: _filterActionList(actions.lateStarts),
           ratificationsSoon: _filterActionList(actions.ratificationsSoon),
           ratificationsExpired: _filterActionList(actions.ratificationsExpired),
@@ -348,7 +391,10 @@
 
     // The action payload is already filtered to the active group by
     // _groupView(), so this total can never count another pool's passes.
-    set('kpi-total', view.actions.passesInWindow.length);
+    // T5: the headline total is EN VUELO (en curso ahora), not in-window.
+    set('kpi-total', view.actions.inFlightNow.length);
+    set('kpi-colgados', view.actions.staleInFlight.length);
+    set('kpi-adelantados', view.actions.earlyStart.length);
     set('kpi-atrasados', kpis.lateStarts);
     set('kpi-coordinados', kpis.ratificationsSoon);
     set('kpi-en-curso', kpis.ratificationsExpired);
@@ -358,7 +404,9 @@
 
   function _applyKPILabels() {
     var labels = {
-      'total': 'Pases en ventana',
+      'total': 'Pases en curso',
+      'colgados': 'Pases fuera de ventana',
+      'adelantados': 'Pases adelantados',
       'atrasados': 'Pases atrasados',
       'coordinados': 'Ratificaciones por vencer',
       'en-curso': 'Ratificaciones vencidas',
@@ -373,7 +421,7 @@
       }
     });
     // Reorder cards to the v1.1 action-model order
-    ['total', 'atrasados', 'coordinados', 'en-curso'].forEach(function (key) {
+    ['total', 'atrasados', 'colgados', 'adelantados', 'coordinados', 'en-curso'].forEach(function (key) {
       var card = section.querySelector('.kpi-card[data-kpi="' + key + '"]');
       if (card) section.appendChild(card);
     });
@@ -406,7 +454,11 @@
   function _onKPIClick(key, view) {
     var A = view.actions;
     if (key === 'total') {
-      _scrollAndHighlightTimeline();                       // Pases en ventana
+      openActionDrawer('Pases en curso', A.inFlightNow, 'inFlightNow');
+    } else if (key === 'colgados') {
+      openActionDrawer('Pases fuera de ventana', A.staleInFlight, 'staleInFlight');
+    } else if (key === 'adelantados') {
+      openActionDrawer('Pases adelantados', A.earlyStart, 'earlyStart');
     } else if (key === 'atrasados') {
       openActionDrawer('Pases atrasados', A.lateStarts, 'lateStarts');
     } else if (key === 'coordinados') {
@@ -621,8 +673,10 @@
     var recurso = barData.responsable || '';            // RECURSO ASIGNADO (v1.1.5)
 
     var typeLabel = barData.type === 'implementacion' ? 'Implementación' : 'Derivado';
-    var startTime = _fmtDateHHMM(barData.start);
-    var endTime = _fmtDateHHMM(barData.start + barData.duration);
+    // T15: real planned dates when the bar carries them (clipped geometry
+    // must never pose as data); computed fallback for older saved files.
+    var startTime = barData.iniPlan || _fmtDateHHMM(barData.start);
+    var endTime = barData.finPlan || _fmtDateHHMM(barData.start + barData.duration);
 
     title.textContent = barData.ticket;
     body.innerHTML = '<dl class="drawer__detail">'
@@ -921,6 +975,18 @@
     }
   }
 
+  /**
+   * A12: reveal the role=alert banner with the first error. Error path only;
+   * the happy path never touches it. Plain textContent (no HTML injection).
+   */
+  function _showLoadError(firstError) {
+    var box = document.getElementById('load-error');
+    if (!box) return;
+    var detail = document.getElementById('load-error-detail');
+    if (detail) detail.textContent = String(firstError);
+    box.hidden = false;
+  }
+
   /* =========================================================
      INIT
      ========================================================= */
@@ -930,6 +996,7 @@
 
     if (!DATA) {
       console.error('[ChangeOps] MockOperations not loaded');
+      _showLoadError('MockOperations not loaded');
       return;
     }
 
@@ -938,6 +1005,7 @@
     if (errors.length > 0) {
       console.error('[ChangeOps] Invalid Data Contract:');
       errors.forEach(function (e) { console.error('  - ' + e); });
+      _showLoadError(errors[0]);
       return;
     }
 

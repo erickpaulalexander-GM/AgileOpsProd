@@ -2,20 +2,19 @@
 T7 — pool visibility groups as a PRESENTATION LAYER (ADR-011).
 
 The 4 pool families (Yape, S&F, AgileOps ORO, AgileOps Prod) are grouped into
-3 visibility groups (YAPE, S&F, AgileOps) that the dashboard exposes through a
+4 visibility groups (YAPE, S&F, AgileOps ORO, AgileOps Prod) that the dashboard
+exposes through a
 selector. The grouping sits ON TOP of the pool scope (ADR-009): it never widens
 nor narrows inclusion, it only partitions what is already in scope.
 
 These tests pin:
 
-- the 3 groups and their declared order;
+- the 4 groups and their declared order;
 - each group's family list;
 - the partition invariant: every pool family is in EXACTLY ONE group — no
   family orphaned (and therefore invisible in every group) and none duplicated;
 - full coverage of the 8 in-scope RECURSO values;
 - per-group KPIs next to the global KPI object (which must stay);
-- that the two-family group (AgileOps) really aggregates across both families
-  instead of reporting only one of them;
 - that the projection is defensive: a malformed group table is a loud
   ValueError, never a silently dropped pool.
 """
@@ -36,11 +35,12 @@ from column_map import (
 from kpi import update_contract_kpis, update_contract_visibility_kpis
 from rules import apply_rules
 
-# The 3 visibility groups, in the order the product owner declared them.
+# The 4 visibility groups, in the order the product owner declared them.
 EXPECTED_GROUPS = [
     ("yape", "YAPE", ["Yape"]),
     ("sf", "S&F", ["S&F"]),
-    ("agileops", "AgileOps", ["AgileOps ORO", "AgileOps Prod"]),
+    ("oro", "AgileOps ORO", ["AgileOps ORO"]),
+    ("prod", "AgileOps Prod", ["AgileOps Prod"]),
 ]
 
 # The 8 in-scope RECURSO values, verbatim from the workbook (ADR-009).
@@ -103,22 +103,23 @@ def _group_by_id(contract, group_id):
 
 
 # ---------------------------------------------------------------
-# The 3 groups and their order
+# The 4 groups and their order
 # ---------------------------------------------------------------
-def test_three_visibility_groups_in_declared_order():
+def test_four_visibility_groups_in_declared_order():
     projected = visibility_groups()
     assert [(g["id"], g["label"], g["families"]) for g in projected] == EXPECTED_GROUPS
 
 
 def test_group_ids_are_the_declaration_order():
-    assert column_map.VISIBILITY_GROUP_IDS == ("yape", "sf", "agileops")
+    assert column_map.VISIBILITY_GROUP_IDS == ("yape", "sf", "oro", "prod")
 
 
 def test_each_group_family_list_is_correct():
     projected = {g["id"]: g for g in visibility_groups()}
     assert projected["yape"]["families"] == ["Yape"]
     assert projected["sf"]["families"] == ["S&F"]
-    assert projected["agileops"]["families"] == ["AgileOps ORO", "AgileOps Prod"]
+    assert projected["oro"]["families"] == ["AgileOps ORO"]
+    assert projected["prod"]["families"] == ["AgileOps Prod"]
 
 
 def test_first_group_is_the_default_candidate():
@@ -213,10 +214,10 @@ def test_group_assignment_follows_family_resolution():
         "POOL - YAPE-DERIVADO": "yape",
         "Pool S&F": "sf",
         "POOL S&F-DERIVADO": "sf",
-        "Pool AgileOps ORO": "agileops",
-        "Pool AgileOps ORO - Derivado": "agileops",
-        "Pool AgileOps Prod": "agileops",
-        "Pool AgileOps Prod - Derivado": "agileops",
+        "Pool AgileOps ORO": "oro",
+        "Pool AgileOps ORO - Derivado": "oro",
+        "Pool AgileOps Prod": "prod",
+        "Pool AgileOps Prod - Derivado": "prod",
     }
     for recurso, group_id in expected.items():
         assert get_visibility_group(recurso) == group_id, recurso
@@ -234,14 +235,15 @@ def test_contract_publishes_the_groups_under_meta():
     groups = contract["meta"]["visibilityGroups"]
     assert [(g["id"], g["label"]) for g in groups] == [("yape", "YAPE"),
                                                        ("sf", "S&F"),
-                                                       ("agileops", "AgileOps")]
+                                                       ("oro", "AgileOps ORO"),
+                                                       ("prod", "AgileOps Prod")]
 
 
 def test_contract_publishes_the_groups_with_zero_bars_in_the_window():
     window = compute_window(REFERENCE)
     contract = to_contract([], {}, window)
     assert contract["timeline"] == []
-    assert len(contract["meta"]["visibilityGroups"]) == 3
+    assert len(contract["meta"]["visibilityGroups"]) == 4
 
 
 def test_pool_order_is_untouched_by_the_grouping():
@@ -268,7 +270,7 @@ def test_every_group_has_per_group_kpis_and_the_global_object_remains():
     contract = _contract_with_groups(rows)
 
     groups = contract["meta"]["visibilityGroups"]
-    assert len(groups) == 3
+    assert len(groups) == 4
     for group in groups:
         kpis = group["kpis"]
         assert set(kpis) == {
@@ -318,12 +320,13 @@ def test_per_group_kpis_do_not_count_another_groups_rows():
 
     assert _group_by_id(contract, "yape")["kpis"]["lateStarts"] == 1
     assert _group_by_id(contract, "sf")["kpis"]["lateStarts"] == 0
-    assert _group_by_id(contract, "agileops")["kpis"]["lateStarts"] == 1
+    assert _group_by_id(contract, "oro")["kpis"]["lateStarts"] == 1
+    assert _group_by_id(contract, "prod")["kpis"]["lateStarts"] == 0
     assert contract["kpis"]["lateStarts"] == 2
 
 
-def test_two_family_group_aggregates_across_both_families():
-    """AgileOps covers ORO + Prod: its KPI must be the SUM, not one of them."""
+def test_oro_group_covers_base_and_derivado_rows():
+    """ORO is one family: base + Derivado rows land in the oro group."""
     rows = [
         _row("T-ORO-1", "Pool AgileOps ORO", ANCHOR + timedelta(minutes=10),
              ANCHOR + timedelta(minutes=40)),
@@ -331,27 +334,16 @@ def test_two_family_group_aggregates_across_both_families():
              ANCHOR + timedelta(minutes=15), ANCHOR + timedelta(minutes=45)),
         _row("T-PROD-1", "Pool AgileOps Prod", ANCHOR + timedelta(minutes=20),
              ANCHOR + timedelta(minutes=50)),
-        _row("T-PROD-2", "Pool AgileOps Prod - Derivado",
-             ANCHOR + timedelta(minutes=25), ANCHOR + timedelta(minutes=55)),
         _row("T-YAPE", "POOL - YAPE", ANCHOR + timedelta(minutes=10),
              ANCHOR + timedelta(minutes=40)),
     ]
     contract = _contract_with_groups(rows)
 
-    oro_rows = [r for r in rows if "ORO" in r["recurso"]]
-    prod_rows = [r for r in rows if "Prod" in r["recurso"]]
-    oro_alone = _contract_with_groups(oro_rows)["kpis"]
-    prod_alone = _contract_with_groups(prod_rows)["kpis"]
-
-    group = _group_by_id(contract, "agileops")
-    assert group["kpis"]["lateStarts"] == 4
-    assert group["kpis"]["ratificationsExpired"] == 4
-    # The group total is strictly greater than either family alone: it really
-    # aggregates, it does not report a single family.
-    assert group["kpis"]["lateStarts"] > oro_alone["lateStarts"]
-    assert group["kpis"]["lateStarts"] > prod_alone["lateStarts"]
-    assert group["kpis"]["lateStarts"] == oro_alone["lateStarts"] + prod_alone["lateStarts"]
-    # And the other groups are unaffected by the two AgileOps families.
+    group = _group_by_id(contract, "oro")
+    assert group["kpis"]["lateStarts"] == 2
+    assert group["tickets"]["passesInWindow"] == ["T-ORO-1", "T-ORO-2"]
+    # Prod lives in its own group now, unaffected by the ORO rows.
+    assert _group_by_id(contract, "prod")["kpis"]["lateStarts"] == 1
     assert _group_by_id(contract, "yape")["kpis"]["lateStarts"] == 1
     assert _group_by_id(contract, "sf")["kpis"]["lateStarts"] == 0
 
@@ -378,6 +370,9 @@ def test_each_group_publishes_the_four_action_ticket_sets():
             "lateStarts",
             "ratificationsSoon",
             "ratificationsExpired",
+            "inFlightNow",
+            "staleInFlight",
+            "earlyStart",
         }, group["id"]
 
 
@@ -407,10 +402,8 @@ def test_action_ticket_sets_partition_the_window_passes():
 
     assert _group_by_id(contract, "yape")["tickets"]["passesInWindow"] == ["T-YAPE"]
     assert _group_by_id(contract, "sf")["tickets"]["passesInWindow"] == ["T-SF"]
-    assert _group_by_id(contract, "agileops")["tickets"]["passesInWindow"] == [
-        "T-ORO",
-        "T-PROD",
-    ]
+    assert _group_by_id(contract, "oro")["tickets"]["passesInWindow"] == ["T-ORO"]
+    assert _group_by_id(contract, "prod")["tickets"]["passesInWindow"] == ["T-PROD"]
 
 
 def test_late_start_ticket_sets_partition_the_late_start_kpi():
@@ -425,10 +418,8 @@ def test_late_start_ticket_sets_partition_the_late_start_kpi():
     contract = _contract_with_groups(rows)
 
     assert _group_by_id(contract, "yape")["tickets"]["lateStarts"] == ["T-YAPE"]
-    assert _group_by_id(contract, "agileops")["tickets"]["lateStarts"] == [
-        "T-ORO",
-        "T-PROD",
-    ]
+    assert _group_by_id(contract, "oro")["tickets"]["lateStarts"] == ["T-ORO"]
+    assert _group_by_id(contract, "prod")["tickets"]["lateStarts"] == ["T-PROD"]
     assert _group_by_id(contract, "sf")["tickets"]["lateStarts"] == []
     assert contract["kpis"]["lateStarts"] == 3
 

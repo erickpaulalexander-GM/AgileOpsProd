@@ -142,13 +142,17 @@ Current groups, all three emitted unconditionally:
 |---|------|---------|------------|---------|
 | 1 | `yape` | `YAPE` | `Yape` | **yes** |
 | 2 | `sf` | `S&F` | `S&F` | no |
-| 3 | `agileops` | `AgileOps` | `AgileOps ORO`, `AgileOps Prod` | no |
+| 3 | `oro` | `AgileOps ORO` | `AgileOps ORO` | no |
+| 4 | `prod` | `AgileOps Prod` | `AgileOps Prod` | no |
 
 ##### `meta.visibilityGroups[].tickets`
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `passesInWindow` | array of string | Tickets with a row in the 8h window, for this group. |
+| `inFlightNow` | array of string | Tickets `Pase en curso` with `INI_IMPL <= updatedAt <= FIN_IMPL`, for this group. The headline KPI card reads this scope, not the window. |
+| `staleInFlight` | array of string | Tickets `Pase en curso` with `FIN_IMPL < updatedAt`, for this group. Invisible everywhere else (timeline/table/drawers) — they get their own `Pases fuera de ventana` card + drawer. |
+| `earlyStart` | array of string | Tickets `Pase en curso` with `INI_IMPL > updatedAt`, for this group. Started early (or misloaded estado) — own `Pases adelantados` card + drawer. |
 | `lateStarts` | array of string | Tickets whose `_late_start` flag is set, for this group. |
 | `ratificationsSoon` | array of string | Tickets whose `_ratification_soon` flag is set. |
 | `ratificationsExpired` | array of string | Tickets whose `_ratification_expired` flag is set. |
@@ -180,7 +184,7 @@ tickets.
 
 ##### Limitation — read before relying on this
 
-> All three groups' rows and records are embedded in the **same**
+> All four groups' rows and records are embedded in the **same**
 > `dashboard.html` / `dashboard_data.json`. Anyone can read every group's data
 > from the file or from devtools, including the groups not selected. The
 > `localStorage` key is a convenience, not a guard. Real enforcement needs a
@@ -198,8 +202,14 @@ tickets.
 
 ### `timeline[]`
 
-One element per pool **that has at least one bar in the window**. Groups with no
+One element per pool **with at least one visible bar**. Groups with no
 bars are omitted entirely (`python/adapter.py::to_contract`).
+
+Timeline scope (T14, ADR-014): a row is drawn when it **overlaps** the 8h
+window — its start falls inside, or it started before and proves overlap
+with a valid `FIN_IMPL` past the window start. Without a valid FIN there is
+no provable overlap, so the row stays out. Pre-window rows render clipped
+to the left edge (`start: 0`, visible duration).
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -249,9 +259,11 @@ so the badge class can never drift from the bar token.
 | `ticket` | string | Ticket ID (e.g. `"MVPAGIPROD-251005"`). Also the bar label rendered on screen. |
 | `name` | string | `NOMBRE APP`, truncated to 50 chars. Shown in the bar's `title` tooltip. |
 | `type` | string | `"implementacion"` or `"derivado"` — **the `type` axis, not the pool identity** (see below) |
-| `start` | number | Integer minutes from `windowStart` (ADR-004). Always in `[0, 480)`. |
-| `duration` | number | Integer minutes. Clipped so `start + duration <= 480`. |
+| `start` | number | Integer minutes from `windowStart` (ADR-004). Always in `[0, 480)` — pre-window rows are clipped to the left edge (`0`). |
+| `duration` | number | Integer minutes **visible on the grid**. Clipped so `start + duration <= 480`. |
 | `status` | string | `"coordinado"`, `"pase-en-curso"` or `"inicio-atrasado"` |
+| `iniPlan` | string | Real `FEC. HORA. INI. IMPL` as `DD/MM HH:MM` — what the detail drawer shows (never the clipped geometry). |
+| `finPlan` | string | Real `FEC. HORA. FIN. IMPL` as `DD/MM HH:MM` — same rule. |
 
 > **A bar has no `pool` field.** The pool is carried **only** by the enclosing
 > `timeline[].pool` group. `timeline.js` injects it onto each bar when it
@@ -356,7 +368,9 @@ web/dashboard.js  +  web/components/timeline/timeline.js
 The HTML is self-contained: all CSS and JS are inlined and the contract is
 embedded as `window.MockOperations.data`. `window.ChangeOpsActions` (ADR-008) is
 embedded alongside it as a **separate, non-contract** informational payload; it
-must not be read as part of Data Contract v1.
+must not be read as part of Data Contract v1. `window.ResourceShifts` (T19) is
+embedded the same way: `{pool: {responsable: {matched, fuera: [[start, end]]}}`
+in grid minutes, plus the header source stamp — none of it is contract.
 
 ---
 
@@ -409,7 +423,7 @@ was anchored to the Excel mtime (`2026-10-05 21:40:36`), producing the
 |------|-------|----------------------|
 | Rows read | 1432 | no |
 | Rows in scope | 571 (861 ignored) | no |
-| `meta.poolOrder` | `["Yape","S&F","AgileOps ORO","AgileOps Prod"]` | no |
+| `meta.poolOrder` | `["Yape","S&F","AgileOps ORO","AgileOps Prod"]` (4 entries; 5 briefly during T10, reverted in T12) | no |
 | Window | `21:00 → 05:00` (480 min) in that historical run | **yes** |
 | Timeline groups / bars | 4 groups — Yape 2, S&F 18, AgileOps ORO 9, AgileOps Prod 53 (82 bars) | **yes** |
 | Table rows | 175 | **yes** |
@@ -439,7 +453,9 @@ requires it, but this workbook snapshot contains **zero** rows with that value.
 Measured from the same historical (mtime-anchored) run, by rendering the
 generated `dashboard.html` once per group. Every column here is
 window/reference-dependent, so the values move with the run clock under
-ADR-012; the partition invariant they demonstrate does not:
+ADR-012; the partition invariant they demonstrate does not. The example predates
+the 4th group (T11): its single `agileops` row is today two rows (`oro`: ORO +
+ORO Derivado, `prod`: Prod).
 
 | `id` | Timeline families | Table rows | `tickets.passesInWindow` | `kpis.lateStarts` | `ratificationsSoon` | `ratificationsExpired` |
 |------|-------------------|-----------|---------------------------|----------------------|---------------------|--------------------------|
@@ -460,6 +476,16 @@ count (165) because a ticket can carry more than one assigned resource.
 
 | Version | Date | Change |
 |---------|------|--------|
+| v1.13 | 2026-10-07 | **Adelantados scope** (caso OCD-231277: ejecutado antes de su slot). `window.ChangeOpsActions` y `tickets` por grupo ganan `earlyStart`: pases `Pase en curso` con `INI_IMPL` futuro. Tarjeta `Pases adelantados` + drawer propios. |
+| v1.12 | 2026-10-07 | **Turnos por carril** (T19). `window.ResourceShifts` sombrean fuera-de-turno por responsable (payload separado, NO contrato) + `shiftScope` en diagnóstico con pases fuera de turno. Sin archivo de turnos: sin sombreado. |
+| v1.11 | 2026-10-07 | **Real dates on bars** (T15). `timeline[].bars[]` gains `iniPlan`/`finPlan` (real `DD/MM HH:MM`) so the detail drawer shows planned dates, never clipped geometry. Additive, no geometry change. |
+| v1.10 | 2026-10-07 | **Timeline overlap scope** (ADR-014). El Timeline dibuja filas que solapan la ventana (inicio adentro, o inicio previo con FIN válido pasado su borde), recortadas a la grilla. Solo geometría: reglas, KPIs y tabla intactos. |
+| v1.9 | 2026-10-07 | **ORO Derivado vuelve a tipo de barra** (T12 revierte T10/ADR-013 a pedido del cliente: los carriles deben leerse igual que los demás pools). Enum 5 → 4; los 4 filtros del T11 quedan (`oro` owns ORO). |
+| v1.8 | 2026-10-07 | **Cuarto filtro** (pedido del cliente). Grupos 3 → 4: `oro` (`AgileOps ORO`, ORO + ORO Derivado) y `prod` (`AgileOps Prod`); `agileops` deja de existir (el `localStorage` viejo cae al default `yape` por diseño). |
+| v1.7 | 2026-10-07 | **ORO Derivado split** (ADR-013, partial exception to ADR-009). `pool` enum grows 4 → 5: `AgileOps ORO Derivado` is its own family with token `agileops-oro-derivado`; `meta.poolOrder` carries 5 entries; the `agileops` visibility group owns 3 families. Other `-DERIVADO` variants stay bar type. |
+| v1.6 | 2026-10-07 | **Sello de fuente en el header**. `dashboard.html` incrusta `window.AgileOpsSource` (nombre + mtime del Excel, payload separado NO contrato) y el header lo muestra junto a `Actualización` para juzgar frescura del archivo. El contrato sigue sin campo mtime. T9: relativo (`hace N min`, fecha exacta en tooltip) + alerta roja con icono si la fuente supera 30 min. |
+| v1.5 | 2026-10-07 | **Colgados scope** (banco: ceguera inaceptable). `window.ChangeOpsActions` y `tickets` por grupo ganan `staleInFlight`: pases `Pase en curso` con `FIN_IMPL` ya pasado, invisibles en timeline/tabla/drawers. Nueva tarjeta `Pases fuera de ventana` + drawer propio. |
+| v1.4 | 2026-10-07 | **En-vuelo scope** (pedido del cliente). `window.ChangeOpsActions` y `tickets` por grupo ganan `inFlightNow`: pases `Pase en curso` cubriendo `updatedAt`, calculados sobre el universo operativo (no solo la ventana). La tarjeta titular muestra este scope con etiqueta `Pases en curso` y abre su Drawer; `passesInWindow` se mantiene para el Timeline. |
 | v1.3 | 2026-10-06 | **Run-clock anchor** (ADR-012, supersedes ADR-005's anchor). `meta.updatedAt` is now the system clock at run time (or the `--now` override), not the Excel mtime. The Excel mtime is kept in `diagnostic_report.json` only (`excelFileMtime`). No shape change — only the provenance and values of `updatedAt` / `windowStart` / `windowEnd`. |
 | v1.2 | 2026-10-05 | **Pool visibility groups** (ADR-011). `meta.visibilityGroups[]` added, each entry carrying `kpis` and `tickets` (ticket-ID sets per action scope) so the web layer can scope the timeline, table, KPI cards and action drawers without hardcoding anything. `meta.kpis` and `window.ChangeOpsActions` stay global. Presentation filter only — all groups remain embedded in the same file. |
 | v1.1 | 2026-10-05 | **AgileOps Prod scope.** `pool` enum replaced with the four AgileOps Prod families; `meta.poolOrder` added (ADR-009); cell width corrected from 80 px to the real 96 px; `type` axis separated from pool identity; conflict rule restated precisely. |

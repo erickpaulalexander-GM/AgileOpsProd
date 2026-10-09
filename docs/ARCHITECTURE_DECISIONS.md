@@ -228,7 +228,9 @@ window.ChangeOpsActions = {
   passesInWindow:       [ … ],
   lateStarts:           [ … ],
   ratificationsSoon:    [ … ],
-  ratificationsExpired: [ … ]
+  ratificationsExpired: [ … ],
+  inFlightNow:          [ … ]   // T5 (2026-10-07): en curso cubriendo updatedAt
+  staleInFlight:         [ … ]   // T6 (2026-10-07): en curso con FIN pasado
 }
 ```
 
@@ -241,6 +243,10 @@ para el cálculo; ADR-008 lo re-habilita únicamente para mostrarlo).
 ### UI
 
 - **Pases en ventana** → scroll al Timeline + resaltado ~1 s (sin Drawer).
+  **Pases en curso** (T5) → Action Drawer con `inFlightNow`; la tarjeta
+  titular muestra este scope, no la ventana.
+  **Pases fuera de ventana** (T6) → Action Drawer con `staleInFlight`;
+  tarjeta propia porque estos tickets no aparecen en ningun otro lado.
 - **Pases atrasados / Rati. por vencer / Rati. vencidas** → Action Drawer
   (reutiliza el Drawer derecho existente; sin modales nuevos).
 - Ticket clicable (`<a target="_blank">`, cursor pointer, Enter nativo) →
@@ -614,8 +620,9 @@ visibility", or as anything that protects data.** It narrows what is rendered.
   `docs/DATA_CONTRACT.md` documents it; a v1 consumer that ignores it still
   works, because Python keeps `meta.kpis` and the web layer degrades when the
   key is absent.
-- The group definition is a **partition**, so the union of the three groups'
-  records equals the full in-scope dataset. That is asserted in tests, and the
+- The group definition is a **partition**, so the union of the groups'
+  records equals the full in-scope dataset (three groups at ADR-011 time,
+  four since T11 — same invariant, asserted in tests), and the
   global KPI object is not always the sum of the groups: rows outside every
   group (i.e. outside the pool whitelist) contribute to the global object only.
 
@@ -740,4 +747,86 @@ python python\main.py
 #   windowStart = floor(current hour)
 #   diagnostic.updatedAtSource = run_clock
 #   diagnostic.excelFileMtime = the workbook's mtime (diagnostic only)
+```
+
+## ADR-013 AgileOps ORO Derivado is its own pool
+
+**Partial exception to ADR-009, at the client's request — REVERTED the same
+day (T12), at the same requester's request.** The lanes must read exactly
+like every other pool, so ORO Derivado is bar type inside ORO again and this
+ADR is historical record only. The 4th topbar filter (T11, `oro` group owning
+the whole ORO family) stays.
+
+What was decided (and reverted) is preserved verbatim below.
+
+**Partial exception to ADR-009, at the client's request.** ADR-009 stays the
+rule — every other `-DERIVADO` variant remains bar type, never pool — but
+`Pool AgileOps ORO - Derivado` now resolves to its own family,
+`AgileOps ORO Derivado`, with its own timeline row, right after `AgileOps ORO`.
+
+### Why
+
+Operators read ORO and ORO-Derivado as separate lanes, the way Yape and S&F
+are separate rows. Merging 32 + 39 rows into one ORO row hid the lane they
+work in. Only ORO splits: S&F-Derivado, Prod-Derivado (and Yape-Derivado)
+keep the ADR-009 treatment, so the change is deliberately asymmetric.
+
+### Decision
+
+1. **One table row.** `_POOL_FAMILY_RESOURCES` gains
+   `("AgileOps ORO Derivado", ("Pool AgileOps ORO - Derivado",))` between ORO
+   and Prod. Position is display order: `meta.poolOrder` now carries 5
+   entries and the timeline renders 5 rows. Inclusion is untouched — the same
+   8 `RECURSO` values, so scope counts (571 in the reference workbook) do
+   not move.
+2. **Token before base.** `_FAMILY_TOKENS` checks `AGILEOPSORODERIVADO`
+   before `AGILEOPSORO` (exact-table hits never reach the fallback, but an
+   unknown spelling variant must not collapse onto the base family).
+3. **Same group.** The `agileops` visibility group owns the new family, so
+   the partition invariant holds and no pool goes dark in any view.
+   T11 (2026-10-07): the group later split in two — `oro` (ORO + Derivado)
+   and `prod` (Prod) — for a 4th topbar filter at the client's request.
+   T12 (2026-10-07): reverted with the family — `oro` now owns ORO alone,
+   `prod` owns Prod; both filters stay.
+4. **Full token set.** `agileops-oro-derivado` gets `--color-*` +
+   `--pool-accent-*` (light + dark), `.badge--*`, `.timeline__pool-header--*`
+   and `.timeline__bar--*`, exactly like any family per `timeline.md`.
+5. **Bar type unchanged.** Derivado rows keep `type: "derivado"` (dashed
+   frame) inside their own row — lane and type stay orthogonal.
+
+### How to prove it (historical — asserted while the split lived)
+
+```powershell
+.\.venv-win\Scripts\python.exe -m pytest tests/test_pool_scope.py tests/test_timeline_grouping.py tests/test_visibility_groups.py -q
+#   poolOrder has 5 entries; ORO-Derivado resolves to its own family;
+#   the agileops group owns 3 families; the whitelist still holds 8 values
+```
+
+## ADR-014 The timeline draws overlap, not just window starts
+
+At the operator's request: lane occupancy must read NOW. A pass that started
+before the 8h window but is still alive at its left edge is drawn clipped to
+that edge (`start: 0`, visible duration), so a resource working a pass never
+looks free. This reverses nothing — ADR-012's anchor and single reference
+stand; only the timeline's *membership* widens from starts-inside to overlap.
+
+### Decision
+
+1. **Overlap, proven.** `filter_to_window()` keeps a pre-window row only with
+   a valid `FIN_IMPL` past the window start. No valid FIN = no provable
+   overlap = out, the same rule T6 uses for colgados.
+2. **Clip in the backend.** `_compute_start_duration()` clips both edges to
+   `[0, 480]`; the frontend receives valid geometry and does not change.
+   Rows, flags, KPIs and the table are untouched — same dict objects, only
+   the bar dict carries clipped minutes.
+3. **Stale rows may clip too.** An `en curso` row with FIN between the window
+   start and now renders as a sliver at the left edge. That is correct lane
+   information (it just finished); the stale drawer stays the action point.
+
+### How to prove it
+
+```powershell
+.\.venv-win\Scripts\python.exe -m pytest tests/test_window_overlap.py -q
+#   pre-window alive -> drawn clipped; spanning -> full grid; finished/
+#   missing-FIN/future -> out; in-window geometry byte-identical
 ```

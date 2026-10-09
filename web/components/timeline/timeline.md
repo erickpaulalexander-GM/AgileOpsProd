@@ -76,3 +76,12 @@ etiqueta mantiene >14:1 en los dos temas.
 
 No hace falta tocar `timeline.js` ni el orden de render: el slug lo produce
 `Timeline.poolKey()`.
+
+## Fuera de turno (T19)
+
+El fondo del carril sombrea los intervalos fuera de turno del responsable
+(`window.ResourceShifts`, payload del backend): fondo slate-100 + diagonal
+0.06 en claro (el slate-50 original se perdia; en dark variante propia),
+siempre DETRÁS de las barras (orden DOM) para que los pases protagonicen.
+Sin match de persona o sin archivo de turnos no se pinta nada. Las etiquetas
+solo salen en segmentos anchos; todo segmento lleva tooltip.

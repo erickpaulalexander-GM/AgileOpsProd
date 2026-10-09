@@ -1,4 +1,4 @@
-# AgileOps Prod Console
+# Pases AgileOps
 
 A self-contained operational dashboard for the **AgileOps Prod pool families**.
 It reads one Excel control workbook and produces a single-file HTML dashboard
@@ -71,6 +71,40 @@ Task Scheduler on the client machine, where the "Start in" folder is not the
 repo. This is ADR-010; how to prove it is in
 [`docs/ARCHITECTURE_DECISIONS.md`](docs/ARCHITECTURE_DECISIONS.md).
 
+On the corporate PC you don't edit code to move paths — you edit
+`config.yaml` in the repo root (created for this feature):
+
+```yaml
+environment: DEV
+paths:
+  input_dir: workspace/input     # relative = repo root; absolute also works
+  output_dir: workspace/output
+excel:
+  pattern: "ControlPases*.xlsx"  # newest match inside input_dir wins
+  sheet: 0                       # name or index; 0 = first sheet
+app:
+  name: "Pases AgileOps"
+  timezone: "America/Lima"        # wall-clock; --now still wins for replays
+shifts:
+  file: "horarios_importados_*.json"  # newest match inside input_dir wins;
+                                      # missing file = no lane shading, warn only
+```
+
+Precedence: CLI `excel_path` > config > built-in defaults. Missing
+`config.yaml` warns and falls back to defaults, so old Scheduler tasks keep
+working. Extra diagnostic keys (`environment`, `configSource`, `timezone`,
+`excelSheet`, `excelPattern`) land in `diagnostic_report.json` only — the
+Data Contract shape is untouched.
+
+The root executor `run.py` is what Scheduler points at (thin wrapper over
+`python/main.py`, same CLI: `[excel_path] [--now DATETIME] [--config PATH]`):
+
+```powershell
+.\.venv-win\Scripts\python.exe run.py
+.\.venv-win\Scripts\python.exe run.py --now "2026-10-06 09:55"
+.\.venv-win\Scripts\python.exe run.py --config "D:\corp\config.yaml"
+```
+
 ### The timeline window is anchored to the run clock (ADR-012)
 
 The 8-hour timeline window starts at the **floor of the clock when the pipeline
@@ -106,7 +140,7 @@ there). Create a daily task with `schtasks` from an elevated prompt — quote th
 whole `/TR` value and use the venv's Python directly:
 
 ```cmd
-schtasks /Create /TN "AgileOps Prod Console" /SC DAILY /ST 09:55 /TR "\"D:\IA_DEV\AgileOpsProd\.venv-win\Scripts\python.exe\" \"D:\IA_DEV\AgileOpsProd\python\main.py\""
+schtasks /Create /TN "AgileOps Prod Console" /SC DAILY /ST 09:55 /TR "\"D:\IA_DEV\AgileOpsProd\.venv-win\Scripts\python.exe\" \"D:\IA_DEV\AgileOpsProd\run.py\""
 ```
 
 - `/ST 09:55` is when the task runs; if it runs at 09:55, the window starts at
@@ -154,6 +188,8 @@ Three files, written to `workspace/output/`:
 | `diagnostic_report.json` | Processing statistics: row counts, scopes, window, conflicts, terminal-state breakdown. |
 
 `workspace/output/*` is git-ignored except `.gitkeep` — regenerate, don't commit.
+The dashboard header shows both clocks: `Actualización` (run time) and the
+source file stamp (`Fuente: <name> · hace N min`) so file freshness is visible.
 
 ---
 
@@ -227,7 +263,10 @@ AgileOpsProd/
 ## Pool families
 
 The timeline has **4 pool rows**. The `-DERIVADO` resource variants are the bar
-**type**, never a separate pool.
+**type**, never a separate pool. (T10 briefly split ORO Derivado into its own
+row at the client's request; T12 reverted it — same requester, same day —
+because the lanes must read exactly like every other pool. The 4th topbar
+filter from T11 stays: the `oro` group owns the whole ORO family.)
 
 | # | Pool (`pool` field) | CSS token | Matching `RECURSO` values | Rows in the current workbook |
 |---|---------------------|-----------|---------------------------|------------------------------|
@@ -246,7 +285,7 @@ The excluded `RECURSO` values are `INFRAESTRUCTURA` (265), `AUTOMATIZADO` (248),
 `DC_CONNECTIVITY(TELECOM)` (20), `CyberSOC` (12), `EU_NETWORKING` (6),
 `OPERACIONES DATA` (5), `SelfServices APIG` (1), `SelfServices AGIL` (1).
 
-Families roll up into the three visibility groups of the next section; the
+Families roll up into the four visibility groups of the next section; the
 mapping is declared over family names, so the two tables cannot drift apart.
 
 Note that `AUTOMATIZADO` and `AUTOMATIZADO ITSM` differ by one token. Inclusion
@@ -259,7 +298,7 @@ preference.
 ## Visibility groups (ADR-011)
 
 The topbar has a **Visibilidad** selector that narrows the whole dashboard to
-one of three **visibility groups**, so somebody working a single pool family does
+one of four **visibility groups**, so somebody working a single pool family does
 not have to read the other families' passes.
 
 > **This is a presentation filter, NOT access control.** Every group's data is
@@ -273,10 +312,11 @@ not have to read the other families' passes.
 |---|------|-------|---------------|---------|
 | 1 | `yape` | YAPE | `Yape` | **yes** |
 | 2 | `sf` | S&F | `S&F` | no |
-| 3 | `agileops` | AgileOps | `AgileOps ORO`, `AgileOps Prod` | no |
+| 3 | `oro` | AgileOps ORO | `AgileOps ORO` | no |
+| 4 | `prod` | AgileOps Prod | `AgileOps Prod` | no |
 
 Switching a group re-renders **everything**: the timeline, the operational table,
-the four KPI cards and the three action drawers. The active group and its record
+the six KPI cards and the six action drawers. The active group and its record
 count are shown next to the selector, scroll position and bar highlight reset,
 and a group with no results gets an explicit empty state instead of a blank
 screen.
@@ -290,7 +330,7 @@ The groups are declared as **pool families**, never as `RECURSO` values, in
 flattened from `_POOL_FAMILY_RESOURCES`. Python publishes the whole thing as
 `meta.visibilityGroups`, each entry carrying its own `kpis` and per-scope ticket
 ID sets, so **the web layer hardcodes no group and no pool**. The definitions must
-partition the four families: an orphaned or duplicated family raises
+partition the five families: an orphaned or duplicated family raises
 `ValueError` at import rather than silently dropping a pool from every view.
 
 Adding a pool family therefore touches the group table too — see the next
@@ -350,7 +390,9 @@ Entries in `diagnostic_report.json` are worth watching after any change:
   drives the window.
 
 Both are scoped differently from each other on purpose: the **timeline** shows
-the 8-hour slice, the **table** shows the live operational universe, and the
+the 8-hour window including passes that started before it but are still
+overlapping (drawn clipped to the left edge, T14), the **table** shows the
+live operational universe, and the
 **KPIs** run over the in-scope set with terminal states excluded (ADR-006). A
 number that looks inconsistent between the three is usually that difference, not
 a bug.

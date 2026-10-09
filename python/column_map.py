@@ -99,6 +99,8 @@ DATE_COLUMNS = [
 _POOL_FAMILY_RESOURCES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Yape", ("POOL - YAPE", "POOL - YAPE-DERIVADO")),
     ("S&F", ("Pool S&F", "POOL S&F-DERIVADO")),
+    # T12: ORO Derivado vuelve a ser tipo de barra dentro de ORO (como los
+    # demas derivados) — el filtro ORO propio del T11 se mantiene.
     ("AgileOps ORO", ("Pool AgileOps ORO", "Pool AgileOps ORO - Derivado")),
     ("AgileOps Prod", ("Pool AgileOps Prod", "Pool AgileOps Prod - Derivado")),
 )
@@ -228,12 +230,14 @@ def get_pool_name(recurso: Any) -> str:
 # does not already accept.
 
 # (group id, display label, pool families in this group)
+# T11 (pedido del cliente): todo ORO tiene filtro propio; Prod queda aparte.
+# T12: el split de familias se revierte (derivado = tipo de barra), pero los
+# 4 filtros quedan: oro owns ORO, prod owns Prod.
 _VISIBILITY_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("yape", "YAPE", ("Yape",)),
     ("sf", "S&F", ("S&F",)),
-    # One group over two existing families — expressed as family names so the
-    # definition cannot drift from the pool table above.
-    ("agileops", "AgileOps", ("AgileOps ORO", "AgileOps Prod")),
+    ("oro", "AgileOps ORO", ("AgileOps ORO",)),
+    ("prod", "AgileOps Prod", ("AgileOps Prod",)),
 )
 
 

@@ -11,8 +11,9 @@ diagnostic report ONLY and never anchors the window. A run can be reproduced
 exactly with ``--now "YYYY-MM-DD HH:MM"``.
 
 TWO SCOPES (explicit):
-  - Timeline scope : only bars whose implementation start is inside the
-                     dynamic 8h window. Feeds timeline + table.
+  - Timeline scope : rows overlapping the dynamic 8h window — starts inside,
+                     or started before with a valid FIN past the window edge
+                     (T14, drawn clipped). Feeds timeline + table.
   - KPI scope      : the in-scope pool set (column_map), one row per record,
                      NO dedup, evaluated with meta.updatedAt as the temporal
                      reference, and with TERMINAL states excluded (ADR-006).
@@ -31,10 +32,25 @@ from pathlib import Path
 from typing import Any
 
 from adapter import compute_window, filter_to_window, to_contract
+from config import (
+    get_sheet,
+    load_config,
+    resolve_input_file,
+    resolve_output_dir,
+    wall_now,
+)
+import renderer as renderer_mod
 from excel_reader import read_excel
+from renderer import build_actions, filter_early_start, filter_in_flight, filter_stale_in_flight, render_dashboard
 from kpi import update_contract_kpis, update_contract_visibility_kpis
-from renderer import build_actions, render_dashboard
 from rules import apply_rules, collect_conflicts, filter_operational, is_terminal
+from shifts import (
+    SHIFT_FILE_PATTERN,
+    build_lane_shifts,
+    collect_out_of_shift,
+    find_shifts_file,
+    load_shifts,
+)
 
 # Repository root — this module lives in <root>/python/. Resolving the default
 # input from here (not from the CWD) makes the pipeline runnable from anywhere.
@@ -80,14 +96,31 @@ def _now() -> datetime:
     return datetime.now()
 
 
-def _resolve_reference_now(reference_now: datetime | None) -> datetime:
+def _resolve_reference_now(
+    reference_now: datetime | None, timezone: str | None = None
+) -> datetime:
     """The SINGLE temporal reference of a run.
 
-    Returns the explicit override when one was supplied, otherwise the real
-    system clock. Every downstream consumer (window, rules, table filter,
+    Returns the explicit override when one was supplied, otherwise the
+    wall-clock in the configured timezone (default America/Lima, naive).
+    Every downstream consumer (window, rules, table filter,
     meta.updatedAt) flows from this one value.
     """
-    return reference_now if reference_now is not None else _now()
+    if reference_now is not None:
+        return reference_now
+    if timezone:
+        base = _now()
+        lima = wall_now(timezone)
+        # Compat con el seam de tests (monkeypatch de _now): si el reloj fue
+        # fijado a un valor lejos del presente real, se honra tal cual.
+        try:
+            far = abs((base - datetime.now()).total_seconds()) > 300
+        except TypeError:
+            far = False
+        if far:
+            return base
+        return lima
+    return _now()
 
 
 # Accepted ``--now`` formats, most specific first. The bare "%H:%M" form is
@@ -129,7 +162,7 @@ def _parse_now(value: str) -> datetime:
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    """CLI: ``main.py [excel_path] [--now DATETIME]``."""
+    """CLI: ``main.py [excel_path] [--now DATETIME] [--config PATH]``."""
     parser = argparse.ArgumentParser(
         prog="main.py",
         description="Generate the AgileOps Prod dashboard from an Excel workbook.",
@@ -137,11 +170,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "excel_path",
         nargs="?",
-        default=str(DEFAULT_EXCEL_PATH),
+        default=None,
         help=(
             "Path to the Excel workbook "
-            "(default: workspace/input/ControlPases.xlsx)."
+            "(default: config paths.input_dir + excel.pattern)."
         ),
+    )
+    parser.add_argument(
+        "--config",
+        dest="config_path",
+        default=None,
+        metavar="PATH",
+        help="Path to config.yaml (default: <repo>/config.yaml).",
     )
     parser.add_argument(
         "--now",
@@ -165,13 +205,19 @@ def cli(argv: list[str] | None = None) -> int:
     Scheduler uses.
     """
     args = _build_arg_parser().parse_args(argv)
-    main(args.excel_path, reference_now=args.reference_now)
+    main(
+        args.excel_path,
+        reference_now=args.reference_now,
+        config_path=args.config_path,
+    )
     return 0
 
 
 def main(
-    excel_path: str | Path = DEFAULT_EXCEL_PATH,
+    excel_path: str | Path | None = None,
     reference_now: datetime | None = None,
+    config_path: str | Path | None = None,
+    cfg: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     """
     Run the complete AgileOps Prod pipeline.
@@ -185,10 +231,35 @@ def main(
     Returns:
         dict with output file paths
     """
-    logger.info("Starting AgileOps Prod pipeline for: %s", excel_path)
+    if cfg is None:
+        cfg = load_config(config_path)
+    resolved_excel = resolve_input_file(cfg, explicit=excel_path)
+    sheet = get_sheet(cfg)
+    cfg_output = resolve_output_dir(cfg)
+    # Compat: los tests parchean renderer.OUTPUT_DIR al tmp dir. Si el modulo
+    # fue parcheado (difiere del default), manda el modulo; si no, manda cfg.
+    default_out = (renderer_mod.REPO_ROOT / "workspace" / "output").resolve()
+    try:
+        use_module_out = Path(renderer_mod.OUTPUT_DIR).resolve() != default_out
+    except OSError:
+        use_module_out = False
+    if use_module_out:
+        output_dir = Path(renderer_mod.OUTPUT_DIR)
+    else:
+        output_dir = cfg_output
+    app_name = str(cfg.get("app", {}).get("name", "Pases AgileOps"))
+    timezone = str(cfg.get("app", {}).get("timezone", "America/Lima"))
+    environment = str(cfg.get("environment", "DEV"))
+    logger.info(
+        "Starting %s pipeline for: %s (env=%s, config=%s)",
+        app_name,
+        resolved_excel,
+        environment,
+        cfg.get("_config_path", "defaults"),
+    )
 
     # Step 1: Read Excel (already filtered to the in-scope pools)
-    data = read_excel(excel_path)
+    data = read_excel(resolved_excel, sheet=sheet)
     rows_all = data["rows"]          # FULL in-scope set (KPI scope)
     diagnostic = data["diagnostic"]
     logger.info("Read %d in-scope rows (KPI scope)", len(rows_all))
@@ -198,7 +269,7 @@ def main(
     # rules' reference_now, the table's live-work filter and meta.updatedAt —
     # flows from this one value. The Excel mtime is NOT a reference; it is
     # reported separately in the diagnostic so a stale file can be spotted.
-    anchor_dt = _resolve_reference_now(reference_now)
+    anchor_dt = _resolve_reference_now(reference_now, timezone=timezone)
     updated_at_display = anchor_dt.strftime("%Y-%m-%dT%H:%M:%S")
     logger.info("Run reference (meta.updatedAt): %s", updated_at_display)
 
@@ -210,12 +281,61 @@ def main(
     #         reference (meta.updatedAt) — this is the KPI scope.
     rows_all = apply_rules(rows_all, reference_now=window["updated_at"])
 
-    # Step 4: Timeline scope = only rows whose impl start is inside the window.
+    # Step 4: Timeline scope = rows overlapping the window (starts inside,
+    #         or started before with proven overlap — T14 clipped in-flight).
     #         (These share the same dict objects, so rule flags carry over.)
     rows_timeline, bars_outside = filter_to_window(rows_all, window)
 
+    # T5: En-vuelo scope = pases en curso cubriendo la referencia, sobre el
+    # universo operativo completo (NO solo la ventana: un pase iniciado
+    # antes de la ventana sigue volando). Es el KPI "Pases en vuelo".
+    rows_in_flight = filter_in_flight(rows_all, anchor_dt)
+    logger.info("In-flight now (Pases en curso): %d", len(rows_in_flight))
+
+    # T6: Colgados = en curso con FIN pasado. Fuera de tabla y drawers
+    # (salvo rati vencida de casualidad); en timeline solo como recorte si
+    # solapan su borde izquierdo (T14). El drawer propio sigue siendo el
+    # lugar para accionarlos.
+    rows_stale = filter_stale_in_flight(rows_all, anchor_dt)
+    logger.info("Stale in-flight (Fuera de ventana): %d", len(rows_stale))
+
+    # T20: Adelantados = en curso con INI futuro (caso OCD-231277).
+    rows_early = filter_early_start(rows_all, anchor_dt)
+    logger.info("Early start (Adelantados): %d", len(rows_early))
+
+    # T18: Turnos por carril — sombreado fuera de turno + pases anómalos.
+    # Sin archivo o con archivo roto: degradado (sin sombreado), nunca crash.
+    shifts_pattern = str(cfg.get("shifts", {}).get("file", SHIFT_FILE_PATTERN))
+    shifts_path = find_shifts_file(Path(cfg["paths"]["input_dir"]), shifts_pattern)
+    shifts_people: list = []
+    shifts_source = "none"
+    if shifts_path is not None:
+        try:
+            shifts_people = load_shifts(shifts_path)["people"]
+            shifts_source = str(shifts_path)
+        except (OSError, ValueError, KeyError) as exc:
+            logger.warning("Turnos no cargados (%s); sin sombreado", exc)
+    lane_shifts = build_lane_shifts(
+        rows_timeline, shifts_people, window["start"], window["end"]
+    )
+    out_of_shift = collect_out_of_shift(rows_all, shifts_people)
+    matched_lanes = sum(
+        1
+        for lanes in lane_shifts.values()
+        for lane in lanes.values()
+        if lane["matched"]
+    )
+    total_lanes = sum(len(lanes) for lanes in lane_shifts.values())
+    logger.info(
+        "Shift lanes: %d/%d matched (%s); out-of-shift: %d",
+        matched_lanes,
+        total_lanes,
+        shifts_source,
+        len(out_of_shift),
+    )
+
     # Step 5: Convert to Data Contract v1.
-    #   - Timeline scope: in-window rows.
+    #   - Timeline scope: overlapping rows (T14, clipped geometry).
     #   - Table scope: the full in-scope pool operational universe.
     contract = to_contract(
         rows_timeline,
@@ -235,10 +355,23 @@ def main(
     # Step 6b: Per-visibility-group KPIs + action ticket scopes (ADR-011).
     # Without this the KPI cards would keep showing the aggregate of ALL pools,
     # leaking the hidden pools' counts through the selector.
-    contract = update_contract_visibility_kpis(contract, rows_all, rows_timeline)
+    contract = update_contract_visibility_kpis(
+        contract,
+        rows_all,
+        rows_timeline,
+        in_flight_rows=rows_in_flight,
+        stale_in_flight_rows=rows_stale,
+        early_start_rows=rows_early,
+    )
 
     # Step 7: Build action payload (ADR-008) and the diagnostic report
-    actions = build_actions(rows_all, rows_timeline)
+    actions = build_actions(
+        rows_all,
+        rows_timeline,
+        in_flight_rows=rows_in_flight,
+        stale_in_flight_rows=rows_stale,
+        early_start_rows=rows_early,
+    )
     operational_rows = filter_operational(rows_all)  # ADR-006
     conflicts = collect_conflicts(rows_all)          # only non-terminal pairs
     responsables = _collect_responsables(operational_rows)
@@ -267,10 +400,19 @@ def main(
             ),
             # Excel mtime — DIAGNOSTIC ONLY. Useful to spot a stale file in a
             # scheduled run; it never reaches the window, the rules or the table.
-            "excelFileMtime": file_mtime_iso(excel_path),
+            "excelFileMtime": file_mtime_iso(resolved_excel),
             "excelFileMtimeSource": "excel_file_mtime",
+            # T8: el header del dash evidencia el archivo fuente (nombre +
+            # mtime) para juzgar frescura. Solo diagnostico, nunca contrato.
+            "excelFileName": Path(resolved_excel).name,
+            "environment": environment,
+            "configSource": str(cfg.get("_config_path", "defaults")),
+            "configKind": str(cfg.get("_source", "defaults")),
+            "timezone": timezone,
+            "excelSheet": sheet,
+            "excelPattern": str(cfg.get("excel", {}).get("pattern", "")),
             "timelineScope": {
-                "description": "Bars whose impl start is inside the dynamic 8h window",
+                "description": "Bars overlapping the dynamic 8h window (starts inside, or started before with valid FIN past its edge — T14, drawn clipped)",
                 "barsInWindow": len(rows_timeline),
                 "barsOutsideWindow": bars_outside,
                 "ticketsInTimeline": sum(len(p["bars"]) for p in contract["timeline"]),
@@ -323,15 +465,36 @@ def main(
             "conflicts": conflicts,
             "actionPayload": {
                 "passesInWindow": len(actions["passesInWindow"]),
+                "inFlightNow": len(actions["inFlightNow"]),
+                "staleInFlight": len(actions["staleInFlight"]),
+                "earlyStart": len(actions["earlyStart"]),
                 "lateStarts": len(actions["lateStarts"]),
                 "ratificationsSoon": len(actions["ratificationsSoon"]),
                 "ratificationsExpired": len(actions["ratificationsExpired"]),
+            },
+            "shiftScope": {
+                "description": (
+                    "Turnos por carril (T18): carriles matcheados y pases "
+                    "fuera de todo turno (anomalia, solo diagnostico)"
+                ),
+                "shiftsFile": shifts_source,
+                "lanesMatched": matched_lanes,
+                "lanesTotal": total_lanes,
+                "outOfShift": len(out_of_shift),
+                "outOfShiftTickets": out_of_shift,
             },
         }
     )
 
     # Step 8: Generate output files
-    output_paths = render_dashboard(contract, diagnostic, actions)
+    output_paths = render_dashboard(
+        contract,
+        diagnostic,
+        actions,
+        output_dir=output_dir,
+        dashboard_title=app_name,
+        resource_shifts=lane_shifts,
+    )
 
     _print_report(contract, diagnostic, output_paths)
 
@@ -417,6 +580,9 @@ def _print_report(
     if ap:
         print("  ACTION PAYLOAD — window.ChangeOpsActions (ADR-008)")
         print(f"    Pases en ventana                    : {ap.get('passesInWindow', 0)}")
+        print(f"    Pases en curso (volando ahora)       : {ap.get('inFlightNow', 0)}")
+        print(f"    Pases fuera de ventana (FIN pasado)  : {ap.get('staleInFlight', 0)}")
+        print(f"    Pases adelantados (INI futuro)       : {ap.get('earlyStart', 0)}")
         print(f"    Pases atrasados                     : {ap.get('lateStarts', 0)}")
         print(f"    Ratificaciones por vencer           : {ap.get('ratificationsSoon', 0)}")
         print(f"    Ratificaciones vencidas             : {ap.get('ratificationsExpired', 0)}")
@@ -425,6 +591,12 @@ def _print_report(
     for name, path in output_paths.items():
         print(f"    {name:<20} : {path}")
     print(line)
+    ss = diagnostic.get("shiftScope", {})
+    if ss:
+        print(f"  Turnos ({ss.get('shiftsFile', 'none')}): "
+              f"{ss.get('lanesMatched', 0)}/{ss.get('lanesTotal', 0)} carriles, "
+              f"{ss.get('outOfShift', 0)} pases fuera de turno")
+        print(line)
     print("  Pool order (meta.poolOrder, emitido por Python): "
           f"{', '.join(contract['meta']['poolOrder'])}")
     groups = (contract.get("meta") or {}).get("visibilityGroups") or []
@@ -436,6 +608,8 @@ def _print_report(
             print(f"    {group['id']:<10} {group['label']:<10} "
                   f"familias={', '.join(group['families'])}  "
                   f"pases_en_ventana={len(tickets.get('passesInWindow', []))}  "
+                  f"en_curso={len(tickets.get('inFlightNow', []))}  "
+                  f"fuera_ventana={len(tickets.get('staleInFlight', []))}  "
                   f"atrasados={kpis.get('lateStarts', 0)}  "
                   f"rati_por_vencer={kpis.get('ratificationsSoon', 0)}  "
                   f"rati_vencidas={kpis.get('ratificationsExpired', 0)}")
