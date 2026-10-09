@@ -317,6 +317,15 @@
   box-shadow: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--text-primary);
 }
 
+/* A3: keyboard focus ring drawn INSIDE the bar (negative offset + inset
+   shadow) so the scroll container never clips it. */
+.timeline__bar:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px var(--bg-surface);
+  z-index: 3;
+}
+
 /* Pool fills — background is the light --color-* token, so the bar label text
    (rgba(0,0,0,.7)) always keeps its contrast in both themes.
    Status modifiers below override the fill; they are declared after these
@@ -368,7 +377,7 @@
 
 .timeline__bar--inicio-atrasado {
   background: var(--color-warning);
-  color: #FFFFFF;
+  color: var(--text-on-warning);
   border: 2px solid var(--color-conflict);
 }
 

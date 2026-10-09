@@ -1,4 +1,4 @@
-# AgileOps Prod Console
+# Pases AgileOps
 
 A self-contained operational dashboard for the **AgileOps Prod pool families**.
 It reads one Excel control workbook and produces a single-file HTML dashboard
@@ -83,7 +83,7 @@ excel:
   pattern: "ControlPases*.xlsx"  # newest match inside input_dir wins
   sheet: 0                       # name or index; 0 = first sheet
 app:
-  name: "AgileOps Prod Console"
+  name: "Pases AgileOps"
   timezone: "America/Lima"        # wall-clock; --now still wins for replays
 shifts:
   file: "horarios_importados_*.json"  # newest match inside input_dir wins;

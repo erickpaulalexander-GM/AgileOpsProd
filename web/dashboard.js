@@ -975,6 +975,18 @@
     }
   }
 
+  /**
+   * A12: reveal the role=alert banner with the first error. Error path only;
+   * the happy path never touches it. Plain textContent (no HTML injection).
+   */
+  function _showLoadError(firstError) {
+    var box = document.getElementById('load-error');
+    if (!box) return;
+    var detail = document.getElementById('load-error-detail');
+    if (detail) detail.textContent = String(firstError);
+    box.hidden = false;
+  }
+
   /* =========================================================
      INIT
      ========================================================= */
@@ -984,6 +996,7 @@
 
     if (!DATA) {
       console.error('[ChangeOps] MockOperations not loaded');
+      _showLoadError('MockOperations not loaded');
       return;
     }
 
@@ -992,6 +1005,7 @@
     if (errors.length > 0) {
       console.error('[ChangeOps] Invalid Data Contract:');
       errors.forEach(function (e) { console.error('  - ' + e); });
+      _showLoadError(errors[0]);
       return;
     }
 

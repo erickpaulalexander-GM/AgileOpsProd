@@ -31,7 +31,7 @@ DEFAULTS: dict[str, Any] = {
         "file": "horarios_importados_*.json",
     },
     "app": {
-        "name": "AgileOps Prod Console",
+        "name": "Pases AgileOps",
         "timezone": "America/Lima",
     },
 }

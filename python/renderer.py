@@ -104,8 +104,8 @@ OUTPUT_DIR = REPO_ROOT / "workspace" / "output"
 
 # The <title> in web/dashboard_template.html replaced below. Both strings must
 # stay byte-identical: renderer.py substitutes it with the app name + updatedAt.
-TEMPLATE_TITLE_TAG = "<title>AgileOps Prod Console</title>"
-DASHBOARD_TITLE = "AgileOps Prod Console"
+TEMPLATE_TITLE_TAG = "<title>Pases AgileOps</title>"
+DASHBOARD_TITLE = "Pases AgileOps"
 
 
 def _fmt_dt(dt: Any) -> str:

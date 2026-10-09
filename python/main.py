@@ -247,7 +247,7 @@ def main(
         output_dir = Path(renderer_mod.OUTPUT_DIR)
     else:
         output_dir = cfg_output
-    app_name = str(cfg.get("app", {}).get("name", "AgileOps Prod Console"))
+    app_name = str(cfg.get("app", {}).get("name", "Pases AgileOps"))
     timezone = str(cfg.get("app", {}).get("timezone", "America/Lima"))
     environment = str(cfg.get("environment", "DEV"))
     logger.info(
