@@ -114,14 +114,25 @@ window.Timeline = (function () {
      ========================================================= */
   function _buildResponsableMap() {
     var map = {};
+    var ambiguous = {};
     var actions = window.ChangeOpsActions;
     if (actions && Array.isArray(actions.passesInWindow)) {
       actions.passesInWindow.forEach(function (r) {
         if (!r || !r.ticket) return;
         var resp = String(r.resource || '').trim();
-        if (resp && resp.toLowerCase() !== 'nan') map[r.ticket] = resp;
+        if (!resp || resp.toLowerCase() === 'nan') return;
+        // Same ticket with different responsables (impl + derivado rows share
+        // the ticket): never guess — mark ambiguous so the fallback does not
+        // pull both bars into one lane and fake a conflict. Bars from new
+        // contracts carry their own `responsable` and skip this map entirely.
+        if (map[r.ticket] === undefined) {
+          map[r.ticket] = resp;
+        } else if (map[r.ticket] !== resp) {
+          ambiguous[r.ticket] = true;
+        }
       });
     }
+    Object.keys(ambiguous).forEach(function (t) { delete map[t]; });
     return map;
   }
 
@@ -138,7 +149,14 @@ window.Timeline = (function () {
 
     _contract.timeline.forEach(function (group) {
       group.bars.forEach(function (bar) {
+        // New contracts carry `responsable` per bar (backend): duplicate
+        // tickets keep their own lane. Only contracts saved before that
+        // field fall back to the ticket-keyed map (ambiguous → Sin asignar).
+        var resp = (bar.responsable && String(bar.responsable).trim())
+          ? String(bar.responsable).trim()
+          : _responsableFor(bar.ticket);
         _allBars.push({
+          _idx: _allBars.length,
           ticket: bar.ticket,
           name: bar.name,
           type: bar.type,
@@ -149,7 +167,7 @@ window.Timeline = (function () {
           iniPlan: bar.iniPlan,
           finPlan: bar.finPlan,
           pool: group.pool,         // pool family, from meta.poolOrder
-          responsable: _responsableFor(bar.ticket),
+          responsable: resp,
         });
       });
     });
@@ -288,6 +306,7 @@ window.Timeline = (function () {
             html += '<div class="' + classes.join(' ') + '"'
               + ' style="' + style + '"'
               + ' data-ticket="' + _esc(bar.ticket) + '"'
+              + ' data-idx="' + bar._idx + '"'
               + ' data-status="' + _esc(bar.status) + '"'
               + ' title="' + _esc(bar.ticket) + ' — ' + _esc(bar.name) + ' (' + bar.duration + ' min)' + (bar.type === 'derivado' ? ' · Derivado' : '') + '"'
               + ' role="button" tabindex="0">'
@@ -305,13 +324,13 @@ window.Timeline = (function () {
 
     el.querySelectorAll('.timeline__bar').forEach(function (barEl) {
       barEl.addEventListener('click', function () {
-        var barData = _findBarByTicket(barEl.dataset.ticket);
+        var barData = _findBarByIdx(barEl.dataset.idx) || _findBarByTicket(barEl.dataset.ticket);
         if (barData && _onBarClick) _onBarClick(barData);
       });
       barEl.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          var barData = _findBarByTicket(barEl.dataset.ticket);
+          var barData = _findBarByIdx(barEl.dataset.idx) || _findBarByTicket(barEl.dataset.ticket);
           if (barData && _onBarClick) _onBarClick(barData);
         }
       });
@@ -450,10 +469,9 @@ window.Timeline = (function () {
         var top = metrics.top + (metrics.height / 2) - 5;
 
         conflicts.forEach(function (conflict) {
-          conflict.barTickets.forEach(function (ticket) {
-            var bar = _allBars.find(function (b) { return b.ticket === ticket; });
-            if (bar) bar._hasConflict = true;
-          });
+          // Mark by object reference: duplicate tickets share the ticket
+          // string, so a ticket-keyed lookup would flag the wrong bar.
+          conflict.bars.forEach(function (bar) { bar._hasConflict = true; });
 
           var midMin = (conflict.start + conflict.end) / 2;
           var left = _labelWidth() + midMin * CELL_PX / CELL_MIN;
@@ -505,6 +523,7 @@ window.Timeline = (function () {
       for (var j = i + 1; j < implBars.length; j++) {
         if (_barsOverlap(implBars[i], implBars[j])) {
           conflicts.push({
+            bars: [implBars[i], implBars[j]],
             barTickets: [implBars[i].ticket, implBars[j].ticket],
             start: Math.max(implBars[i].start, implBars[j].start),
             end: Math.min(
@@ -551,6 +570,12 @@ window.Timeline = (function () {
      ========================================================= */
   function _findBarByTicket(ticket) {
     return _allBars.find(function (b) { return b.ticket === ticket; }) || null;
+  }
+
+  function _findBarByIdx(idx) {
+    var n = parseInt(idx, 10);
+    if (isNaN(n) || n < 0 || n >= _allBars.length) return null;
+    return _allBars[n];
   }
 
   /**

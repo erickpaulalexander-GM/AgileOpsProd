@@ -644,17 +644,24 @@
   var _tableIndex = {};
 
   /** Indexed from the ACTIVE GROUP's rows: the drawer must not enrich a bar
-   *  with a row belonging to a hidden pool. */
+   *  with a row belonging to a hidden pool. Keyed by ticket + start so
+   *  duplicate tickets (impl + derivado) never collapse into one row. */
+  function _tableKey(ticket, inicio) {
+    return String(ticket || '') + '|' + String(inicio || '');
+  }
+
   function _buildTableIndex(table) {
     _tableIndex = {};
     if (!Array.isArray(table)) return;
     table.forEach(function (r) {
-      if (r && r.ticket) _tableIndex[r.ticket] = r;
+      if (r && r.ticket) _tableIndex[_tableKey(r.ticket, r.inicio_impl)] = r;
     });
   }
 
-  function _lookupTicket(ticket) {
-    return _tableIndex[ticket] || null;
+  function _lookupTicket(ticket, inicio) {
+    return _tableIndex[_tableKey(ticket, inicio)]
+      || _tableIndex[_tableKey(ticket, '')]
+      || null;
   }
 
   function openDrawer(barData) {
@@ -666,7 +673,7 @@
     if (!drawer || !barData) return;
 
     // Enrich from the operational table (pool / NOMBRE APP / Estado Actual).
-    var idx = _lookupTicket(barData.ticket) || {};
+    var idx = _lookupTicket(barData.ticket, barData.iniPlan) || {};
     var appName = barData.name || idx.name || '';
     var pool = barData.pool || idx.pool || '';          // pool family (meta.poolOrder)
     var estadoActual = idx.status || barData.status || '';

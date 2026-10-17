@@ -357,9 +357,11 @@ def to_contract(
     wstart = window["start"]   # datetime — day-aware minutes
 
     # Timeline groups keep the display pool FAMILY resolved from the real
-    # RECURSO value. The render-only grouping by RECURSO ASIGNADO happens in
-    # the frontend, derived from the window.ChangeOpsActions payload (which
-    # carries `resource` per ticket).
+    # RECURSO value. Each bar carries its own `responsable` (RECURSO ASIGNADO
+    # verbatim), so the frontend groups by lane without a ticket-keyed lookup
+    # — duplicate tickets (impl + derivado) never collapse into one lane.
+    # The legacy render-only grouping from window.ChangeOpsActions remains as
+    # fallback for contracts saved before this field existed.
     pools: dict[str, list[dict]] = {}
     for row in rows:
         # The Timeline only shows ACTIVE operational states.
@@ -473,6 +475,9 @@ def _row_to_bar(row: dict[str, Any], window_start: str) -> dict[str, Any] | None
     `start`/`duration` are grid geometry (T14 clips pre-window rows to the
     left edge). `iniPlan`/`finPlan` carry the REAL planned datetimes for the
     detail drawer (T15) — same `DD/MM HH:MM` display format as the table.
+    `responsable` carries RECURSO ASIGNADO verbatim so the frontend groups
+    each bar in its own lane without re-deriving it by ticket (duplicate
+    tickets with different responsables share the ticket but never the lane).
     """
     ticket = row.get("ticket", "")
     if not ticket:
@@ -498,6 +503,7 @@ def _row_to_bar(row: dict[str, Any], window_start: str) -> dict[str, Any] | None
         "status": status,
         "iniPlan": row["inicio_impl"].strftime("%d/%m %H:%M"),
         "finPlan": row["fin_impl"].strftime("%d/%m %H:%M"),
+        "responsable": str(row.get("responsable", "") or "").strip(),
     }
 
 
