@@ -804,6 +804,13 @@
   function _selectOptions(select) {
     if (!select) return;
     select.innerHTML = '';
+
+    // Global filter: the empty value means "no group", i.e. every pool at once.
+    var all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'Todos';
+    select.appendChild(all);
+
     _groups.forEach(function (g) {
       var opt = document.createElement('option');
       opt.value = g.id;
@@ -815,10 +822,10 @@
   /**
    * Resolve the group to show on load.
    *
-   * Stored id wins, but ONLY if it still exists. A missing, corrupt or stale
-   * value (a pool list that changed after the page was generated) falls back to
-   * the FIRST group, which is the declared default. There is no safe universal
-   * default — the product owner chose the first group deliberately (ADR-011).
+   * Default is "Todos" (no group): the dashboard opens on the global view and
+   * the filter is a choice, not a requirement. A stored id wins, but ONLY if it
+   * still exists. A corrupt or stale value (a pool list that changed after the
+   * page was generated) is cleaned up and falls back to "Todos".
    */
   function _initialGroup() {
     var stored = storageGet(GROUP_STORAGE_KEY);
@@ -828,12 +835,17 @@
       // Stale id: clean it up so the next load does not re-check a dead value.
       storageSet(GROUP_STORAGE_KEY, '');
       console.warn('[ChangeOps] Stored pool group "' + stored +
-        '" no longer exists — falling back to the first group.');
+        '" no longer exists — falling back to all pools.');
     }
-    return _groups[0] || null;
+    return null;
   }
 
   function _onGroupChange(id) {
+    // "" is the "Todos" option: no group filter at all.
+    if (!id) {
+      _applyGroup(null, { persist: true });
+      return;
+    }
     var group = _groupById(id);
     if (!group) group = _groups[0] || null;
     _applyGroup(group, { persist: true });
@@ -861,20 +873,37 @@
   function _renderGroupIndicator(view) {
     var badge = document.getElementById('pool-group-badge');
     var counts = document.getElementById('pool-group-counts');
-    if (!_activeGroup) {
-      if (badge) badge.textContent = 'Todos los pools';
-      if (counts) counts.textContent = '';
-      return;
-    }
+
     if (badge) {
-      badge.textContent = _activeGroup.label;
-      badge.className = 'pool-group__badge pool-group__badge--' + _groupKey(_activeGroup.id);
+      if (_activeGroup) {
+        badge.textContent = _activeGroup.label;
+        badge.className = 'pool-group__badge pool-group__badge--' + _groupKey(_activeGroup.id);
+      } else {
+        // No group: the global view. Reset the class so the badge never keeps
+        // the previous group's colour.
+        badge.textContent = 'Todos los pools';
+        badge.className = 'pool-group__badge';
+      }
     }
     if (counts) {
-      counts.textContent = view.barCount + ' pase' + (view.barCount !== 1 ? 's' : '')
-        + ' en ventana · ' + view.table.length + ' fila' + (view.table.length !== 1 ? 's' : '')
+      // "En la vista" = what the timeline actually drew (the 4h viewport), not
+      // every bar in the 8h contract window.
+      var shown = _visibleBarCount(view);
+      counts.textContent = shown + ' pase' + (shown !== 1 ? 's' : '')
+        + ' en la vista · ' + view.table.length + ' fila' + (view.table.length !== 1 ? 's' : '')
         + ' en la tabla';
     }
+  }
+
+  /**
+   * Bars the timeline actually drew. Falls back to the contract count when the
+   * component has not rendered yet (never understates what is on screen).
+   */
+  function _visibleBarCount(view) {
+    if (window.Timeline && typeof window.Timeline.visibleBarCount === 'function') {
+      return window.Timeline.visibleBarCount();
+    }
+    return view.barCount;
   }
 
   /** group id → CSS-safe token. Same rule as Timeline.poolKey (ADR-009). */
@@ -922,10 +951,10 @@
     _renderGroupIndicator(view);
 
     // Timeline — re-init with the filtered contract so Timeline's internal
-    // _allBars / _rowMetrics / _poolOrder are rebuilt from scratch. meta.poolOrder
-    // stays the FULL list on purpose (ADR-009): Timeline skips pools with no
-    // bars, so the group shows only its own rows while a group with zero bars
-    // in the window renders an empty state instead of a broken layout.
+    // _allBars / _rowMetrics / lane list are rebuilt from scratch. meta.poolOrder
+    // stays the FULL list on purpose (ADR-009): Timeline skips lanes with no
+    // bars in the 4h viewport, so the group shows only its own rows while a
+    // group with zero bars renders an empty state instead of a broken layout.
     var container = document.getElementById('timeline');
     window.Timeline.init(container, {
       meta: DATA.meta,
@@ -939,9 +968,23 @@
     renderTable(view.table, group);
     _buildTableIndex(view.table);
 
-    if (opts.persist && group) {
-      storageSet(GROUP_STORAGE_KEY, group.id);
+    if (opts.persist) {
+      // "Todos" persists as an empty string, so the choice survives a reload.
+      storageSet(GROUP_STORAGE_KEY, group ? group.id : '');
     }
+  }
+
+  /**
+   * The 4h viewport the timeline draws, as "04:30 y 08:30 (ventana de 4 h)".
+   * Read from Timeline so the empty state and the grid can never disagree.
+   */
+  function _viewWindowLabel() {
+    if (!window.Timeline || typeof window.Timeline.viewWindow !== 'function') {
+      return DATA.meta.windowStart + ' y ' + DATA.meta.windowEnd;
+    }
+    var w = window.Timeline.viewWindow();
+    return window.Timeline.clockLabel(w.startMin) + ' y '
+      + window.Timeline.clockLabel(w.endMin) + ' (ventana de 4 h)';
   }
 
   /**
@@ -953,20 +996,22 @@
     var empty = document.getElementById('timeline-empty');
     if (!empty) return;
 
-    // The window is always shown: it is what makes "no bars" a fact about the
+    // The viewport is always shown: it is what makes "no bars" a fact about the
     // snapshot rather than a broken layout.
     var windowEl = document.getElementById('timeline-empty-window');
     if (windowEl) {
-      windowEl.textContent = DATA.meta.windowStart + ' y ' + DATA.meta.windowEnd;
+      windowEl.textContent = _viewWindowLabel();
     }
 
-    if (view.barCount > 0) {
+    // A group can carry bars in the 8h contract window yet none inside the 4h
+    // viewport; the empty state must follow what is drawn, not the contract.
+    if (_visibleBarCount(view) > 0) {
       empty.hidden = true;
       return;
     }
 
-    var label = _activeGroup ? _activeGroup.label : '—';
-    var families = _activeGroup ? _activeGroup.families.join(', ') : '';
+    var label = _activeGroup ? _activeGroup.label : 'todos los pools';
+    var families = _activeGroup ? _activeGroup.families.join(', ') : 'todos';
     var familiesEl = document.getElementById('timeline-empty-families');
     if (familiesEl) familiesEl.textContent = families;
     var labelEl = document.getElementById('timeline-empty-group');

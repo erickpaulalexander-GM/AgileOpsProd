@@ -20,11 +20,10 @@
      themes on purpose: the bar label is rgba(0,0,0,.7), so a light fill keeps
      the label above 14:1 regardless of the theme.
 
-     --pool-accent-* are the pool-header accents (3px border + 8px dot), which
-     sit on --bg-surface. A dark accent is invisible on the dark surface, so the
-     dark theme re-declares them lighter below. Both sets are overridden by the
-     .timeline__pool-header--<token> rules in components/timeline/timeline.css,
-     which is where a pool's token is bound to its colours. */
+     --pool-accent-* are the KPI pool-group badge accents
+     (.pool-group__badge--<token> in this file), which sit on --bg-surface. A
+     dark accent is invisible on the dark surface, so the dark theme re-declares
+     them lighter below. */
   --color-yape: #F6E7A7;
   --color-sf: #E6D7FF;
   --color-agileops-oro: #BFDBFE;
