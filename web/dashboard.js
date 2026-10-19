@@ -948,7 +948,6 @@
     closeDrawer();
 
     renderKPIs(view.kpis, view);
-    _renderGroupIndicator(view);
 
     // Timeline — re-init with the filtered contract so Timeline's internal
     // _allBars / _rowMetrics / lane list are rebuilt from scratch. meta.poolOrder
@@ -962,6 +961,12 @@
       timeline: view.timeline,
       table: view.table,
     }, openDrawer);
+
+    // AFTER the timeline render: the indicator's bar count is
+    // Timeline.visibleBarCount(), which the render above just recomputed.
+    // Reading it before init would report the previous group's number.
+    _renderGroupIndicator(view);
+
     _renderTimelineEmptyState(view);
     _resetTimelineScroll();
 
