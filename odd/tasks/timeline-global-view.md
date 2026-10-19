@@ -3,8 +3,8 @@
 Objetivo: una única vista de Timeline, global (sin bloques por pool) y con ventana de 4 h anclada al minuto exacto de la corrida, que sea la vista por defecto. Filtro global por pool que afecta timeline, KPIs y tabla.
 
 - Branch: `feature/timeline-global-view`
-- Estrategia de entrega: `ask-on-risk` (forecast ~300 líneas autoradas < 400 → un solo PR)
-- Runner de tests: `python -m pytest` (no hay tests de frontend; sólo cubre `python/`)
+- Estrategia de entrega: `ask-on-risk`. Forecast inicial ~300 líneas < 400; real: 985 líneas autoradas (ver L15) → decisión de entrega pendiente (un solo PR vs cadena)
+- Runner de tests: `& .venv-win\Scripts\python.exe -m pytest` (el `python` del PATH no tiene pandas). Cubre `python/` + `tests/test_timeline_global_view.py` (probe Node con DOM stub, skip si no hay `node`)
 
 ## Specs
 
