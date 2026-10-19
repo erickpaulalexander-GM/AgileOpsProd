@@ -67,7 +67,7 @@ const c={meta:{updatedAt:'2026-10-19T04:30:00',windowStart:'04:00',windowEnd:'12
 T.init(doc.getElementById('timeline'), c, null);
 const h=els['timeline-header'].innerHTML, g=els['timeline-grid'].innerHTML, b=els['timeline-bars'].innerHTML;
 const styleOf=(tk)=>{ const m=new RegExp('<div class="timeline__bar[^"]*" style="([^"]*)" data-ticket="'+tk+'"').exec(b); return m?m[1]:'ABSENT'; };
-const rows=[...b.matchAll(/class="timeline__row-label"[^>]*>([^<]*)</g)].map(m=>m[1]);
+const rows=[...b.matchAll(/class="timeline__row-name">([^<]*)</g)].map(m=>m[1]);
 console.log(JSON.stringify({ offsetMin:T.viewWindow().offsetMin, minutes:T.viewWindow().minutes,
   widths:[...g.matchAll(/width:([0-9.]+)px/g)].map(m=>+m[1]),
   labels:[...h.matchAll(/>(\d{2}:\d{2})</g)].map(m=>m[1]),
@@ -87,7 +87,7 @@ def test_s2_s5_a2_geometry(tmp_path):
     assert d["minutes"] == 240 and d["offsetMin"] == 30
     assert d["labels"] == ["04:30", "05:00", "06:00", "07:00", "08:00"]
     assert d["widths"] == [96] * 8 and sum(d["widths"]) == 768
-    assert "left:0px" in d["barEarly"] and "width:96px" in d["barEarly"]
+    # 1px inset per side so adjacent passes never fuse: left 0+1, width 96-2\n    assert "left:1px" in d["barEarly"] and "width:94px" in d["barEarly"]
     assert d["barLate"] == "ABSENT"
     assert d["rows"] == ["Ana", "Ana"]
 

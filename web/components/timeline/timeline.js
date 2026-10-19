@@ -66,6 +66,9 @@ window.Timeline = (function () {
   var _rowMetrics = {};       // lane key (pool + responsable) → { top, height }
   var _viewOffsetMin = 0;     // minutes from the window start to the run clock
   var _visibleBarCount = 0;   // bars drawn inside the 4h viewport by the last render
+  var _cellPx = CELL_PX;      // px per 30-min cell; stretched to fill the container (_fitScale)
+  var _resizeBound = false;   // window resize listener registered once
+  var _resizeTimer = null;
 
   /* =========================================================
      INIT — receives Data Contract v1
@@ -110,7 +113,28 @@ window.Timeline = (function () {
 
   /** Minutes → pixels on the time axis. */
   function _minutesToPx(min) {
-    return min * CELL_PX / CELL_MIN;
+    return min * _cellPx / CELL_MIN;
+  }
+
+  /**
+   * Stretch the 4h axis to the container width so no horizontal space is wasted.
+   * CELL_PX is the floor (narrow screens scroll); wider screens get wider cells.
+   * The value is mirrored into --timeline-grid-30min so CSS min-widths agree.
+   */
+  function _fitScale() {
+    var avail = _container ? _container.clientWidth - _labelWidth() : 0;
+    var cell = avail > 0 ? Math.floor((avail / (VIEW_MINUTES / CELL_MIN)) * 100) / 100 : CELL_PX;
+    _cellPx = Math.max(CELL_PX, cell);
+    if (_container && _container.style && _container.style.setProperty) _container.style.setProperty('--timeline-grid-30min', _cellPx + 'px');
+  }
+
+  function _bindResize() {
+    if (_resizeBound || typeof window.addEventListener !== 'function') return;
+    _resizeBound = true;
+    window.addEventListener('resize', function () {
+      clearTimeout(_resizeTimer);
+      _resizeTimer = setTimeout(function () { render(); }, 120);
+    });
   }
 
   /** "04:30" for a clock minute-of-day. */
@@ -210,6 +234,8 @@ window.Timeline = (function () {
   function render() {
     if (!_container || !_contract) return;
 
+    _fitScale();
+    _bindResize();
     _renderHeader();
     _renderGrid();
     _renderBars();
@@ -236,8 +262,11 @@ window.Timeline = (function () {
       var seg = toHour === 0 ? 60 : toHour;
       if (cursor + seg > VIEW_MINUTES) seg = VIEW_MINUTES - cursor;
 
+      // A segment too narrow for its label (run at 14:55 -> 5 min before 15:00)
+      // would print over the next hour label, so it stays blank.
+      var segPx = _minutesToPx(seg);
       html += '<div class="timeline__hour" style="width:'
-        + _minutesToPx(seg) + 'px">' + _offClock(abs) + '</div>';
+        + segPx + 'px">' + (segPx < 44 ? '' : _offClock(abs)) + '</div>';
       cursor += seg;
     }
     el.innerHTML = html;
@@ -319,19 +348,28 @@ window.Timeline = (function () {
 
       html += '<div class="timeline__row" style="height:' + rowH + 'px">'
         + '<div class="timeline__row-label" title="' + _esc(group.responsable) + '">'
-        + _esc(group.responsable) + '</div>'
+        + '<span class="timeline__row-name">' + _esc(group.responsable) + '</span>'
+        + '<span class="timeline__row-count" title="' + bars.length + ' pase(s) en la ventana">' + bars.length + '</span>'
+        + '</div>'
         + '<div class="timeline__row-lane">'
         + _offShiftHtml(group.pool, group.responsable, off);
 
       var barHeight = (rowH - gap * 2 - gap * (maxDepth - 1)) / maxDepth;
 
       lanes.forEach(function (lane, laneIdx) {
+        // Divider between stacked sub-lanes: makes 1 vs 2 simultaneous passes
+        // of the same resource unambiguous.
+        if (laneIdx > 0) {
+          html += '<div class="timeline__sublane-sep" style="top:'
+            + (gap + laneIdx * (barHeight + gap) - gap / 2 - 0.5) + 'px"></div>';
+        }
         lane.forEach(function (item) {
           var bar = item.bar;
 
           // ADR-004 minutes from the window start, shifted into the viewport.
-          var left  = _minutesToPx(bar._visStart);
-          var width = _minutesToPx(bar._visEnd - bar._visStart);
+          // 1px inset each side so back-to-back passes never fuse into one block.
+          var left  = _minutesToPx(bar._visStart) + 1;
+          var width = Math.max(2, _minutesToPx(bar._visEnd - bar._visStart) - 2);
           var top   = gap + laneIdx * (barHeight + gap);
 
             var classes = [
@@ -362,7 +400,7 @@ window.Timeline = (function () {
               + ' data-status="' + _esc(bar.status) + '"'
               + ' title="' + _esc(bar.ticket) + ' — ' + _esc(bar.name) + ' (' + bar.duration + ' min)' + (bar.type === 'derivado' ? ' · Derivado' : '') + '"'
               + ' role="button" tabindex="0">'
-              + _esc(bar.ticket)
+              + (width < 56 ? '' : _esc(bar.ticket))   // too narrow to read; the tooltip has it
               + '</div>';
           });
       });

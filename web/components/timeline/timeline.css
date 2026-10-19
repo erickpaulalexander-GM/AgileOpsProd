@@ -175,11 +175,56 @@
   text-overflow: ellipsis;
 }
 
+/* Name + pass counter inside the sticky label */
+.timeline__row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timeline__row-count {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  min-width: 16px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--timeline-grid-line);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0;
+}
+
 /* Right column: lane where every bar of that responsable is drawn */
 .timeline__row-lane {
   position: relative;
   flex: 1 0 auto;
   min-width: calc(var(--timeline-grid-30min) * 8);  /* 4 h = 8 cells */
+  /* Row separator across the whole axis + light zebra so each resource's
+     passes read as one band. Translucent: the grid lines stay visible. */
+  border-bottom: 1px solid var(--text-muted);
+}
+
+.timeline__row:nth-child(even) .timeline__row-lane {
+  background: rgba(148, 163, 184, 0.07);
+}
+
+.timeline__row:nth-child(even) .timeline__row-label {
+  background: var(--bg-surface-alt);
+}
+
+/* Divider between stacked sub-lanes of ONE resource (simultaneous passes) */
+.timeline__sublane-sep {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px dashed var(--text-muted);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* ---- T19: off-shift lane shading (turnos) ----
