@@ -3,17 +3,20 @@
   CSS Grid with layered architecture. NO <table>.
 
   Layers:
-    1. __header       — hour labels (23:00, 00:00, 01:00 …)
+    1. __header       — hour labels aligned to the clock
     2. __grid         — 30-min column lines
-    3. __bars         — operation bars (one row group per pool family)
+    3. __bars         — operation bars in ONE flat global list
     4. __indicators   — conflict triangles
     5. __selection    — KPI-driven highlight overlay
 
   Owner: TIMELINE_SPEC.md
+  Viewport: 4h = 8 half-hour cells. The contract window stays 8h wide and the
+  component draws only the 4h slice anchored to the run clock, so every axis
+  width below is 8 cells, not 16.
   Pool families: 4 — Yape, S&F, AgileOps ORO, AgileOps Prod. The order and the
-  name list are NOT declared here: they come from meta.poolOrder in the data
-  contract (ADR-009), and the CSS keys below are the slug tokens produced by
-  Timeline.poolKey(). Adding a pool family only requires the Python-side list.
+  name list are NOT declared here: they come from the data contract, and the CSS
+  keys below are the slug tokens produced by Timeline.poolKey(). Adding a pool
+  family only requires the Python-side list.
 
   Phase 2 changes:
     - Removed "now" line (static snapshot, not live tracking)
@@ -21,16 +24,15 @@
     - Added __bar--conflict for z-index boost on conflicting bars
     - Overlap stacking handled by JS (timeline.js)
 
-  Phase 2.6 (Dashboard improvements):
-    - Pool group headers (one per pool family, data-driven)
-    - Row height increased to 44px for better readability
+  Global view:
+    - No pool sections: rows are a flat list grouped by (pool, responsable)
+    - Rows are ordered by first start; the pool only keeps homonyms apart
 */
 
 /* =============================================  container  */
 .timeline {
   --timeline-label-width: 220px;   /* sticky responsable column (v1.1.5) */
   --timeline-header-height: 28px;      /* hour header row; top offset of every layer */
-  --timeline-pool-header-height: 28px; /* pool group header row */
   position: relative;
   width: 100%;
   height: auto;
@@ -62,7 +64,7 @@
   align-items: flex-end;
   height: var(--timeline-header-height);
   /* scrolls horizontally with the time axis (the gutter is the sticky part) */
-  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 16);
+  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 8);
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-surface-alt);
   z-index: 10;
@@ -70,13 +72,19 @@
 
 .timeline__hour {
   flex-shrink: 0;
-  width: calc(var(--timeline-grid-30min) * 2); /* 1 hour = 2 cells */
+  /* Fallback only: JS sets the exact segment width, because the segments are
+     clock-aligned and the first one absorbs the run-minute offset. */
+  width: calc(var(--timeline-grid-30min) * 2);
   padding: 0 4px 4px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
   text-align: left;
   border-left: 1px solid var(--border-color);
+  /* A label may belong to a shorter segment (e.g. 04:30 → 05:00); never clip
+     the text against the next line. */
+  white-space: nowrap;
+  overflow: visible;
 }
 
 .timeline__hour:first-child {
@@ -98,7 +106,7 @@
 .timeline__grid {
   display: flex;
   padding-top: var(--timeline-header-height);
-  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 16);
+  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 8);
 }
 
 .timeline__grid-col {
@@ -131,83 +139,11 @@
   opacity: 0.4;
 }
 
-/* =============================================  pool headers  */
-.timeline__pool-header {
-  position: relative;
-  display: flex;
-  height: var(--timeline-pool-header-height);
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  color: var(--text-secondary);
-  /* Fallback so a pool the JS could not tokenize still gets a visible accent
-     instead of an unstyled one. Overridden per pool below. */
-  --pool-accent: var(--border-strong);
-  z-index: 8;
-}
-
-/* Pool label shares the responsable column and stays pinned (like the
-   responsable labels) while the timeline scrolls horizontally, so a row never
-   loses its pool context. */
-.timeline__pool-label {
-  position: sticky;
-  left: 0;
-  flex: 0 0 var(--timeline-label-width);
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-  background: var(--bg-surface);
-  border-right: 3px solid var(--pool-accent, var(--border-color));
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-/* Pool accents — one per pool family, in meta.poolOrder order. This is where a
-   pool's token is BOUND to its accent; the values themselves are theme-aware
-   tokens declared in theme.css, because a dark accent is invisible on the dark
-   surface and the same accent must also read on the light surface.
-
-   These rules MUST stay AFTER the base `.timeline__pool-header` fallback: both
-   selectors have the same specificity, so source order is what makes a per-pool
-   accent win over the fallback. */
-.timeline__pool-header--yape          { --pool-accent: var(--pool-accent-yape); }
-.timeline__pool-header--sf            { --pool-accent: var(--pool-accent-sf); }
-.timeline__pool-header--agileops-oro { --pool-accent: var(--pool-accent-agileops-oro); }
-.timeline__pool-header--agileops-prod { --pool-accent: var(--pool-accent-agileops-prod); }
-
-.timeline__pool-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--pool-accent);
-}
-
-.timeline__pool-name {
-  flex: 0 0 auto;
-}
-
-.timeline__pool-counts {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-muted);
-  text-transform: none;
-  letter-spacing: normal;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* =============================================  bars  */
 .timeline__bars {
   position: relative;
   padding-top: var(--timeline-header-height);
-  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 16);
+  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 8);
 }
 
 /* Row — one single row per RECURSO ASIGNADO (v1.1.5) */
@@ -243,7 +179,7 @@
 .timeline__row-lane {
   position: relative;
   flex: 1 0 auto;
-  min-width: calc(var(--timeline-grid-30min) * 16);  /* 8 h = 16 cells */
+  min-width: calc(var(--timeline-grid-30min) * 8);  /* 4 h = 8 cells */
 }
 
 /* ---- T19: off-shift lane shading (turnos) ----
@@ -404,7 +340,7 @@
 .timeline__indicators {
   /* triangles carry an explicit top (row-aligned) — no padding needed */
   padding-top: 0;
-  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 16);
+  min-width: calc(var(--timeline-label-width) + var(--timeline-grid-30min) * 8);
   pointer-events: none;
 }
 
@@ -449,19 +385,10 @@
 @media (max-width: 768px) {
   .timeline__hour {
     font-size: 10px;
-    width: calc(var(--timeline-grid-30min) * 1.5);
   }
 
   .timeline__bar {
     font-size: 9px;
     padding: 0 4px;
-  }
-
-  .timeline__pool-header {
-    font-size: 10px;
-  }
-
-  .timeline__pool-counts {
-    font-size: 9px;
   }
 }
