@@ -20,9 +20,9 @@ Los comportamientos S1-S6 están reconstruidos desde el código implementado: el
 
 | ID | Specs | Ruta | Estado | Commit |
 |----|-------|------|--------|--------|
-| T1 | S5 | inline | pending | (catálogo de pools en `timeline.js` + leyenda generada + test adaptado) |
-| T2 | S1-S4, S6 | inline | pending | (`table.js` + `test_table_pipeline.py` + `renderer.py` + template + `dashboard.js` + `theme.css`) |
-| T3 | A2 | inline | pending | (push + PR aparte apilado sobre `feature/timeline-global-view`) |
+| T1 | S5 | inline | done | `bfcbd0b` |
+| T2 | S1-S4, S6 | inline | done | `7598386` |
+| T3 | A2 | inline | done | `6e7c6dd` (docs); PR apilado abierto tras `7598386` |
 
 ## Log
 
@@ -30,8 +30,12 @@ L1 (2026-10-20, origen): trabajo encontrado ya escrito pero **sin commitear** en
 
 L2 (2026-10-20, decisión del usuario, verbatim): "como PR aparte / en que quedó?"
 
+L3 (2026-10-20, evidencia previa a los commits):
+
 L3 (2026-10-20, evidencia previa a los commits): `pytest` 203 passed (197 previos + 4 de timeline + 2 nuevos de tabla); `node --check` OK en `table.js`, `timeline.js` y `dashboard.js`; smoke `run.py --now "2026-10-16 14:40"` → `dashboard.html` 198.706 bytes con `window.OpsTable` inlineado, sin `<script src>` residual, toolbar y contenedor de leyenda presentes, `poolInfo` exportado; `dashboard_data.json` sha256 `2B18F73D8F309C9F…`.
 
 L4 (2026-10-20, tamaño y slicing): total autorado del tramo ≈ 806 líneas (`table.js` 536, `theme.css` 112, `test_table_pipeline.py` 78, `timeline.js` 69, `dashboard.js` 68, template 7, `renderer.py` 5, test de timeline −1/+1). Un único slicing honesto: T1 (catálogo, ~71 líneas) y T2 (componente, ~806). T2 no puede bajar de 400 sin partir el IIFE en dos PRs artificiales que empeorarían la revisión → se entrega como un solo PR con recomendación `size:exception` para el maintainer.
 
-L5 (2026-10-20, verificación y entrega): pytest 203 passed en el árbol commiteado; RDD assess sobre `b516270..HEAD` registrado en el PR.
+L5 (2026-10-20, verificación y entrega): `gentle-ai review assess --base-ref origin/feature/timeline-global-view --committed-only` → `risk: medium` (`executable_change: python/renderer.py`), `review_due: false`, `review_due_reason: under_budget` → sin review nativo (el tier de verify cubrió el cambio). `pytest` 203 passed sobre el árbol commiteado.
+
+L6 (2026-10-20, commits): tree limpio tras los tres commits `6e7c6dd` (docs) + `bfcbd0b` (T1, catálogo) + `7598386` (T2, componente). `pytest` 203 passed sobre el árbol commiteado. Pendiente: assess RDD sobre `b516270..HEAD` y push + PR apilado (T3).
