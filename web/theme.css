@@ -815,3 +815,115 @@ body {
 
   .kpi-card__value { font-size: 22px; }
 }
+
+/* ----------------------------------------------  table toolbar + filters  */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.table-toolbar .tb-mode { font-weight: 700; color: var(--text-primary); }
+.table-toolbar .tb-spacer { flex: 1; }
+
+.tb-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-surface-alt);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tb-btn:hover { background: var(--bg-hover); }
+.tb-btn--ghost { background: transparent; color: var(--text-secondary); }
+.tb-btn:focus-visible,
+.tf-chip:focus-visible,
+.th-sort:focus-visible,
+.tf-reset:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+/* sortable titles */
+.th-sort {
+  all: unset;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.th-sort:hover { color: var(--text-primary); }
+.th-arrow { color: var(--text-primary); }
+
+/* compact second header row: filters */
+.tf-row td {
+  padding: 4px 14px 6px;
+  background: var(--bg-surface-alt);
+  border-bottom: 2px solid var(--border-strong);
+  vertical-align: top;
+}
+.tf-cell { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.tf-chips, .tf-dates { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.tf-dates { flex-direction: column; }
+
+.tf-input {
+  width: 100%;
+  min-width: 90px;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+}
+.tf-input--date { min-width: 128px; color-scheme: light dark; }
+.tf-date { display: flex; align-items: center; gap: 4px; }
+.tf-date > span {
+  flex: 0 0 34px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+}
+
+.tf-chip {
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tf-chip[aria-pressed="true"] {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-surface);
+}
+.tf-chip--pool { padding: 0; border: 0; background: transparent; border-radius: 3px; opacity: 0.55; }
+.tf-chip--pool[aria-pressed="true"] { background: transparent; opacity: 1; outline: 2px solid var(--text-primary); outline-offset: 1px; }
+.tf-chip--pool .timeline__pool-chip { margin: 0; display: inline-block; }
+
+.tf-reset {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tf-reset:hover { color: var(--text-primary); }
+.tf-reset[hidden], .table-toolbar [hidden] { display: none; }
+
+/* pool chip inside a table cell: same pill as the Timeline */
+.table-section td .timeline__pool-chip { margin-right: 0; display: inline-block; }
+.table-empty .tb-btn { margin-left: 6px; }

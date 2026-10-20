@@ -84,10 +84,7 @@
       <span class="timeline-legend__title">Leyenda del Timeline:</span>
       <span class="timeline-legend__item">
         <strong>Pool</strong>
-        <span class="timeline__pool-chip timeline__pool-chip--yape">YAPE</span>
-        <span class="timeline__pool-chip timeline__pool-chip--sf">S&amp;F</span>
-        <span class="timeline__pool-chip timeline__pool-chip--agileops-oro">ORO</span>
-        <span class="timeline__pool-chip timeline__pool-chip--agileops-prod">PROD</span>
+        <span class="timeline-legend__pools" id="timeline-legend-pools"></span>
       </span>
       <span class="timeline-legend__item">
         <span class="timeline-legend__swatch timeline-legend__swatch--off" aria-hidden="true"></span>
@@ -149,6 +146,7 @@
 
     <!-- TABLE — dinámica, filtrable -->
     <section class="table-section" id="table-section">
+      <div class="table-toolbar" id="table-toolbar"></div>
       <table>
         <thead id="table-head"></thead>
         <tbody id="table-body"></tbody>
@@ -170,6 +168,7 @@
 
   <script src="data/mock-operations.js"></script>
   <script src="components/timeline/timeline.js"></script>
+  <script src="components/table/table.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>
