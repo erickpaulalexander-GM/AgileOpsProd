@@ -335,12 +335,12 @@
   background: var(--tl-coordinado-bg);
 }
 
-/* ---- Derivado: dashed 2px frame on the WHOLE bar, whatever the status.
-   Status keeps its fill; the frame uses the status text colour so it stays
-   visible on every fill. A border (not outline) so it never collides with the
-   KPI flash outline, and border-box keeps the computed geometry intact. ---- */
+/* ---- Derivado: thin dashed 1px frame on the WHOLE bar, whatever the status.
+   Status keeps its fill. It REPLACES the status border (same 1px width, so no
+   double border and no geometry change); a border, not an outline, so it never
+   collides with the KPI flash outline. Colour comes from --tl-derivado-border. ---- */
 .timeline__bar--derivado {
-  border: 2px dashed var(--tl-bar-text, rgba(0,0,0,.7));
+  border: 1px dashed var(--tl-derivado-border);
 }
 /* ---- KPI filter: dimmed bars ---- */
 .timeline__bar--dimmed {
@@ -416,6 +416,7 @@
   flex: 0 0 auto;
   margin-right: 6px;
   padding: 0 5px 0 4px;
+  border: 1px solid var(--tl-chip-outline);
   border-left: 3px solid var(--tl-chip-accent-default);
   border-radius: 3px;
   background: var(--tl-chip-bg);
@@ -452,7 +453,7 @@
   flex: 0 0 auto;
   margin-left: 8px;
   padding: 0 4px;
-  border: 1px dashed currentColor;
+  border: 1px dashed var(--tl-derivado-tag-border);
   border-radius: 3px;
   font-size: 9px;
   font-weight: 700;

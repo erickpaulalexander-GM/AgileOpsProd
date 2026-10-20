@@ -64,8 +64,15 @@
   --tl-coordinado-border: #60A5FA;
   --tl-coordinado-text: #1E3A5F;
 
+  /* Derivado frame: slate-blue, thin and dashed. Replaces the status border (same
+     1px width, so no geometry change) and never competes with the fill. The bar
+     fills are identical in both themes, so one value serves both. */
+  --tl-derivado-border: #5B6B82;
+  --tl-derivado-tag-border: rgba(51, 65, 85, 0.5);
+
   /* Pool chip: dark pill + per-pool accent stripe (keys = Timeline.poolKey tokens) */
   --tl-chip-bg: #1E293B;
+  --tl-chip-outline: rgba(148, 163, 184, 0.45);   /* keeps the pill visible on dark surfaces */
   --tl-chip-text: #FFFFFF;
   --tl-chip-accent-default: #94A3B8;
   --tl-chip-accent-yape: #8B5CF6;

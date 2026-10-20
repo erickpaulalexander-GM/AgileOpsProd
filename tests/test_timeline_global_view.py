@@ -109,6 +109,6 @@ def test_bar_palette_is_status_driven_and_pool_is_a_chip():
     # no pool-driven bar fill any more
     for pool in ("yape", "sf", "agileops-oro", "agileops-prod"):
         assert ".timeline__bar--%s {" % pool not in css
-    assert "border: 2px dashed" in css            # derivado frame
+    assert "border: 1px dashed var(--tl-derivado-border)" in css   # derivado frame
     js = _read("web/components/timeline/timeline.js")
     assert "data-pool=" in js and "_hasPool(pool)" in js
