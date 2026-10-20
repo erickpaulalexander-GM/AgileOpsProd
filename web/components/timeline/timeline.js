@@ -60,28 +60,53 @@ window.Timeline = (function () {
   var CHIP_MIN_FULL_PX = 140;    // bar width for the full pool pill
   var CHIP_MIN_DOT_PX = 56;      // below this the ticket owns the whole bar
   var DERIVADO_TAG_MIN_PX = 250; // bar width for the secondary DERIVADO tag
-  var POOL_TAG = { 'yape': 'YAPE', 'sf': 'S&F', 'agileops-oro': 'ORO', 'agileops-prod': 'PROD' };
-  function _poolTag(pool) {
-    var key = _poolKey(pool);
-    if (POOL_TAG[key]) return POOL_TAG[key];
-    return String(pool || UNKNOWN_POOL).replace(/[^A-Za-z0-9&]/g, '').slice(0, 3).toUpperCase();
+  /* POOL CATALOG: the ONE place that decides which pool a record belongs to.
+     `id` is the stable internal identifier (also the CSS token and data-pool);
+     `aliases` are slugs (see _poolKey) of every spelling found in the data:
+     the pool family from the contract ("AgileOps Prod") and the raw resource
+     names ("Pool AgileOps Prod"). The Timeline bars, the legend, the table POOL
+     column and the table pool filter all go through poolInfo(). */
+  var POOL_CATALOG = [
+    { id: 'yape',          tag: 'YAPE', label: 'Yape',          aliases: ['yape', 'pool-yape'] },
+    { id: 'sf',            tag: 'S&F',  label: 'S&F',           aliases: ['sf', 'pool-sf'] },
+    { id: 'agileops-oro',  tag: 'ORO',  label: 'AgileOps ORO',  aliases: ['agileops-oro', 'oro', 'pool-agileops-oro'] },
+    { id: 'agileops-prod', tag: 'PROD', label: 'AgileOps Prod', aliases: ['agileops-prod', 'prod', 'pool-agileops-prod'] },
+  ];
+  var POOL_NONE_ID = 'sin-pool';
+
+  /**
+   * Normalize a pool value WITHOUT altering the original string:
+   *   - blank / 'Unknown'     -> neutral SIN POOL (never guessed)
+   *   - alias in the catalog  -> that pool
+   *   - anything else         -> neutral chip with its own name (not mapped to
+   *                              a catalog pool, because nothing backs that)
+   */
+  function _poolInfo(pool) {
+    var raw = typeof pool === 'string' ? pool.trim() : '';
+    if (!raw || raw === UNKNOWN_POOL) {
+      return { id: POOL_NONE_ID, tag: 'SIN POOL', label: 'Sin pool', known: false, raw: '' };
+    }
+    var slug = _poolKey(raw);
+    for (var n = 0; n < POOL_CATALOG.length; n++) {
+      if (POOL_CATALOG[n].aliases.indexOf(slug) !== -1) {
+        var c = POOL_CATALOG[n];
+        return { id: c.id, tag: c.tag, label: c.label, known: true, raw: raw };
+      }
+    }
+    return { id: slug, tag: raw.toUpperCase().slice(0, 8), label: raw, known: false, raw: raw };
   }
 
-  /* Chip inside the bar: status owns the bar fill, so the pool needs its own
-     marker. Full pill on wide bars, accent square on medium ones. A bar whose
-     pool is missing gets NO chip (never a guessed pool). */
-  function _hasPool(pool) {
-    return !!pool && pool !== UNKNOWN_POOL;
-  }
-
+  /* Chip markup shared by bars, legend and table. `width` (px) picks the form on
+     a bar: full pill, accent square, or nothing; omit it for the full pill. */
   function _poolChipHtml(pool, width) {
-    if (!_hasPool(pool) || width < CHIP_MIN_DOT_PX) return '';
-    var full = width >= CHIP_MIN_FULL_PX;
-    return '<span class="timeline__pool-chip timeline__pool-chip--' + _poolKey(pool)
+    var info = _poolInfo(pool);
+    var w = (typeof width === 'number') ? width : Infinity;
+    if (w < CHIP_MIN_DOT_PX) return '';
+    var full = w >= CHIP_MIN_FULL_PX;
+    return '<span class="timeline__pool-chip timeline__pool-chip--' + info.id
       + (full ? '' : ' timeline__pool-chip--dot') + '" aria-hidden="true">'
-      + (full ? _esc(_poolTag(pool)) : '') + '</span>';
+      + (full ? _esc(info.tag) : '') + '</span>';
   }
-
   function _derivadoTagHtml(bar, width) {
     return (bar.type === 'derivado' && width >= DERIVADO_TAG_MIN_PX)
       ? '<span class="timeline__derivado-tag" aria-hidden="true">DERIVADO</span>'
@@ -92,7 +117,7 @@ window.Timeline = (function () {
      found as the non-derivado bar that carries the same ticket. */
   function _barTitle(bar) {
     var t = bar.ticket + ' — ' + bar.name;
-    if (_hasPool(bar.pool)) t += ' · Pool: ' + bar.pool;
+    t += ' · Pool: ' + _poolInfo(bar.pool).tag;
     t += ' (' + bar.duration + ' min)';
     if (bar.type === 'derivado') {
       t += ' · Derivado';
@@ -103,7 +128,7 @@ window.Timeline = (function () {
       }
       if (origin) {
         t += ' · Origen: ' + (origin.responsable || '—')
-          + (_hasPool(origin.pool) ? ' (' + origin.pool + ')' : '');
+          + ' (' + _poolInfo(origin.pool).tag + ')';
       }
     }
     return t;
@@ -453,7 +478,7 @@ window.Timeline = (function () {
               + ' data-ticket="' + _esc(bar.ticket) + '"'
               + ' data-idx="' + bar._idx + '"'
               + ' data-status="' + _esc(bar.status) + '"'
-              + (_hasPool(bar.pool) ? ' data-pool="' + _poolKey(bar.pool) + '"' : '')
+              + ' data-pool="' + _poolInfo(bar.pool).id + '"'
               + ' data-type="' + _esc(bar.type) + '"'
               + ' title="' + _esc(_barTitle(bar)) + '"'
               + ' role="button" tabindex="0">'
@@ -814,6 +839,12 @@ window.Timeline = (function () {
     // Public so dashboard.js shares ONE pool→token rule (ADR-009) instead of
     // re-deriving a class name with different logic.
     poolKey: _poolKey,
+    // Pool catalog API: the table, legend and filters reuse it instead of
+    // re-classifying pools (no second normalization anywhere).
+    poolInfo: _poolInfo,
+    poolChipHtml: function (pool) { return _poolChipHtml(pool); },
+    poolCatalog: function () { return POOL_CATALOG.map(function (c) { return { id: c.id, tag: c.tag, label: c.label }; }); },
+    poolNoneId: POOL_NONE_ID,
     // Public so the empty state and any consumer print the SAME 4h viewport the
     // grid draws, instead of re-deriving the run-clock offset.
     viewWindow: _viewWindow,
