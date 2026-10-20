@@ -865,7 +865,7 @@ body {
   vertical-align: top;
 }
 .tf-cell { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
-.tf-chips, .tf-dates { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.tf-chips, .tf-dates { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; flex: 1 1 auto; }
 .tf-dates { flex-direction: column; }
 
 .tf-input {
@@ -880,10 +880,11 @@ body {
   font: inherit;
   font-size: 11px;
 }
-.tf-input--date { min-width: 128px; color-scheme: light dark; }
-.tf-date { display: flex; align-items: center; gap: 4px; }
+.tf-input--date { min-width: 0; width: 100%; color-scheme: light dark; }
+/* Date filter: label above the input so the ~130px datetime field fits the
+   ~135px column instead of overflowing it (label inline was 166px wide). */
+.tf-date { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .tf-date > span {
-  flex: 0 0 34px;
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -913,6 +914,8 @@ body {
 
 .tf-reset {
   flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 12px;          /* align with the input, below the stacked label */
   padding: 0 4px;
   border: 0;
   background: transparent;
@@ -922,7 +925,10 @@ body {
   cursor: pointer;
 }
 .tf-reset:hover { color: var(--text-primary); }
-.tf-reset[hidden], .table-toolbar [hidden] { display: none; }
+/* Reserve the reset slot so showing/hiding it never reflows the filter row;
+   only the toolbar's global clear stays layout-hidden. */
+.tf-reset[hidden] { visibility: hidden; }
+.table-toolbar [hidden] { display: none; }
 
 /* pool chip inside a table cell: same pill as the Timeline */
 .table-section td .timeline__pool-chip { margin-right: 0; display: inline-block; }

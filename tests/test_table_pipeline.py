@@ -1,5 +1,5 @@
 """Table: pool catalog, next-60-min window, per-column filters, sorting."""
-import json, shutil, subprocess
+import json, re, shutil, subprocess
 from pathlib import Path
 import pytest
 
@@ -76,3 +76,47 @@ def test_table_pipeline(tmp_path):
     assert d["sortFin"] == ["OCD-3", "OCD-1", "OCD-2", "OCD-4", "OCD-5", "OCD-6"]
     assert d["yearWrap"] == 2027
     assert d["badDate"] == [True, True]
+
+
+def _css_block(css, selector):
+    """Declarations of the first rule whose selector IS exactly `selector`.
+
+    Walk the stylesheet one rule at a time with a brace-depth counter instead
+    of splitting on '}': a CSS comment may itself contain '}' (e.g.
+    "~130px } ~135px"), which would truncate the rule that follows it.
+    Comments are stripped first; selectors are split on ',' so `.tf-date` is
+    not confused with the combined `.tf-chips, .tf-dates` rule.
+    """
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    target = selector.strip()
+    pos, n = 0, len(css)
+    while pos < n:
+        open_at = css.find("{", pos)
+        if open_at == -1:
+            return []
+        depth, end = 1, open_at + 1
+        while end < n and depth:
+            if css[end] == "{":
+                depth += 1
+            elif css[end] == "}":
+                depth -= 1
+            end += 1
+        head, body = css[pos:open_at], css[open_at + 1:end - 1]
+        if target in {s.strip() for s in head.split(",")}:
+            return [d.strip() for d in body.split(";") if d.strip()]
+        pos = end
+    return []
+
+
+def test_date_filter_cell_fits_the_column():
+    """The datetime field must not overflow its ~135px column (it needs the
+    full cell width, so its label stacks above instead of beside it), and the
+    reset button must keep its slot when hidden or the filter row reflows."""
+    css = (ROOT / "web/theme.css").read_text(encoding="utf-8")
+    date_input = _css_block(css, ".tf-input--date")
+    assert "min-width: 0" in date_input, "date input must be allowed to shrink to the column"
+    label = _css_block(css, ".tf-date")
+    assert "flex-direction: column" in label, "label sits above the input, not beside it"
+    reset = _css_block(css, ".tf-reset[hidden]")
+    assert any(d.startswith("visibility: hidden") for d in reset), \
+        "hidden reset must stay in layout (display:none makes the row reflow)"
