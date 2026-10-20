@@ -57,6 +57,9 @@ window.Timeline = (function () {
   /* Short on-bar pool tag. Keyed by the CSS token from _poolKey; a pool outside
      this table falls back to the first 3 letters of its name, so a new pool
      still gets a tag without a code change. */
+  var CHIP_MIN_FULL_PX = 140;    // bar width for the full pool pill
+  var CHIP_MIN_DOT_PX = 56;      // below this the ticket owns the whole bar
+  var DERIVADO_TAG_MIN_PX = 250; // bar width for the secondary DERIVADO tag
   var POOL_TAG = { 'yape': 'YAPE', 'sf': 'S&F', 'agileops-oro': 'ORO', 'agileops-prod': 'PROD' };
   function _poolTag(pool) {
     var key = _poolKey(pool);
@@ -64,15 +67,47 @@ window.Timeline = (function () {
     return String(pool || UNKNOWN_POOL).replace(/[^A-Za-z0-9&]/g, '').slice(0, 3).toUpperCase();
   }
 
-  /* Chip inside the bar: the status colour owns the bar background, so the pool
-     needs its own always-visible marker. Label shrinks with the bar width. */
-  function _poolChipHtml(pool, width) {
-    var tag = _poolTag(pool);
-    var mod = width >= 90 ? '' : ' timeline__pool-chip--dot';
-    return '<span class="timeline__pool-chip timeline__pool-chip--' + _poolKey(pool) + mod + '" aria-hidden="true">'
-      + (mod ? '' : _esc(tag)) + '</span>';
+  /* Chip inside the bar: status owns the bar fill, so the pool needs its own
+     marker. Full pill on wide bars, accent square on medium ones. A bar whose
+     pool is missing gets NO chip (never a guessed pool). */
+  function _hasPool(pool) {
+    return !!pool && pool !== UNKNOWN_POOL;
   }
 
+  function _poolChipHtml(pool, width) {
+    if (!_hasPool(pool) || width < CHIP_MIN_DOT_PX) return '';
+    var full = width >= CHIP_MIN_FULL_PX;
+    return '<span class="timeline__pool-chip timeline__pool-chip--' + _poolKey(pool)
+      + (full ? '' : ' timeline__pool-chip--dot') + '" aria-hidden="true">'
+      + (full ? _esc(_poolTag(pool)) : '') + '</span>';
+  }
+
+  function _derivadoTagHtml(bar, width) {
+    return (bar.type === 'derivado' && width >= DERIVADO_TAG_MIN_PX)
+      ? '<span class="timeline__derivado-tag" aria-hidden="true">DERIVADO</span>'
+      : '';
+  }
+
+  /* Tooltip: ticket, app, pool and duration; a derivado also names its origin,
+     found as the non-derivado bar that carries the same ticket. */
+  function _barTitle(bar) {
+    var t = bar.ticket + ' — ' + bar.name;
+    if (_hasPool(bar.pool)) t += ' · Pool: ' + bar.pool;
+    t += ' (' + bar.duration + ' min)';
+    if (bar.type === 'derivado') {
+      t += ' · Derivado';
+      var origin = null;
+      for (var k = 0; k < _allBars.length; k++) {
+        var o = _allBars[k];
+        if (o.ticket === bar.ticket && o.type !== 'derivado') { origin = o; break; }
+      }
+      if (origin) {
+        t += ' · Origen: ' + (origin.responsable || '—')
+          + (_hasPool(origin.pool) ? ' (' + origin.pool + ')' : '');
+      }
+    }
+    return t;
+  }
   /* =========================================================
      STATE
      ========================================================= */
@@ -418,10 +453,13 @@ window.Timeline = (function () {
               + ' data-ticket="' + _esc(bar.ticket) + '"'
               + ' data-idx="' + bar._idx + '"'
               + ' data-status="' + _esc(bar.status) + '"'
-              + ' title="' + _esc(bar.ticket) + ' — ' + _esc(bar.name) + ' · ' + _esc(bar.pool) + ' (' + bar.duration + ' min)' + (bar.type === 'derivado' ? ' · Derivado' : '') + '"'
+              + (_hasPool(bar.pool) ? ' data-pool="' + _poolKey(bar.pool) + '"' : '')
+              + ' data-type="' + _esc(bar.type) + '"'
+              + ' title="' + _esc(_barTitle(bar)) + '"'
               + ' role="button" tabindex="0">'
               + _poolChipHtml(bar.pool, width)
               + (width < 56 ? '' : _esc(bar.ticket))   // too narrow to read; the tooltip has it
+              + _derivadoTagHtml(bar, width)
               + '</div>';
           });
       });

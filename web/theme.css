@@ -52,6 +52,27 @@
      badge and bar. Dark text, ~6.8:1; white was ~2.1:1. */
   --text-on-warning: #1F2937;
 
+  /* Timeline bar palette: the bar colour is the OPERATIONAL STATUS only.
+     Pool identity is a separate chip (accent below), never the bar fill. */
+  --tl-en-curso-bg: #A7F3D0;
+  --tl-en-curso-border: #10B981;
+  --tl-en-curso-text: #064E3B;
+  --tl-atrasado-bg: #FBBF24;
+  --tl-atrasado-border: #F59E0B;
+  --tl-atrasado-text: #78350F;
+  --tl-coordinado-bg: #BFDBFE;
+  --tl-coordinado-border: #60A5FA;
+  --tl-coordinado-text: #1E3A5F;
+
+  /* Pool chip: dark pill + per-pool accent stripe (keys = Timeline.poolKey tokens) */
+  --tl-chip-bg: #1E293B;
+  --tl-chip-text: #FFFFFF;
+  --tl-chip-accent-default: #94A3B8;
+  --tl-chip-accent-yape: #8B5CF6;
+  --tl-chip-accent-sf: #0F766E;
+  --tl-chip-accent-agileops-oro: #CA8A04;
+  --tl-chip-accent-agileops-prod: #64748B;
+
   /* Layout */
   --content-max-width: 1600px;
   --content-padding: 16px;
@@ -483,15 +504,18 @@ body {
 .timeline-legend__swatch--prod { background: var(--color-agileops-prod); }
 
 .timeline-legend__swatch--en-curso {
-  background-color: #ECFDF3;
-  background-image: linear-gradient(to right, #16A34A 0 4px, transparent 4px);
-  outline: 1px solid #86D7A3;
-  outline-offset: -1px;
+  background: var(--tl-en-curso-bg);
+  border: 1px solid var(--tl-en-curso-border);
 }
 
 .timeline-legend__swatch--atrasado {
-  background: var(--color-warning);
-  border: 2px solid var(--color-conflict);
+  background: var(--tl-atrasado-bg);
+  border: 1px solid var(--tl-atrasado-border);
+}
+
+.timeline-legend__swatch--coordinado {
+  background: var(--tl-coordinado-bg);
+  border: 1px solid var(--tl-coordinado-border);
 }
 
 .timeline-legend__swatch--derivado {

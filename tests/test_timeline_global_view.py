@@ -97,3 +97,18 @@ def test_b1_indicator_rendered_after_timeline_init():
     src = _read("web/dashboard.js")
     body = src[src.index("function _applyGroup"):src.index("function _viewWindowLabel")]
     assert body.index("window.Timeline.init(") < body.index("_renderGroupIndicator(view)")
+
+
+def test_bar_palette_is_status_driven_and_pool_is_a_chip():
+    """Bar fill follows the status tokens; the pool is a chip + stable data hook."""
+    css = _read("web/components/timeline/timeline.css")
+    theme = _read("web/theme.css")
+    for tok in ("--tl-en-curso-bg: #A7F3D0", "--tl-atrasado-bg: #FBBF24",
+                "--tl-coordinado-bg: #BFDBFE", "--tl-chip-accent-yape: #8B5CF6"):
+        assert tok in theme
+    # no pool-driven bar fill any more
+    for pool in ("yape", "sf", "agileops-oro", "agileops-prod"):
+        assert ".timeline__bar--%s {" % pool not in css
+    assert "border: 2px dashed" in css            # derivado frame
+    js = _read("web/components/timeline/timeline.js")
+    assert "data-pool=" in js and "_hasPool(pool)" in js

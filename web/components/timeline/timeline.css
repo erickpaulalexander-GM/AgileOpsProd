@@ -307,68 +307,41 @@
   z-index: 3;
 }
 
-/* Pool fills — background is the light --color-* token, so the bar label text
-   (rgba(0,0,0,.7)) always keeps its contrast in both themes.
-   Status modifiers below override the fill; they are declared after these
-   rules on purpose so status keeps winning. */
-.timeline__bar--yape {
-  background: var(--color-yape);
-}
-
-.timeline__bar--sf {
-  background: var(--color-sf);
-}
-
-.timeline__bar--agileops-oro {
-  background: var(--color-agileops-oro);
-}
-
-.timeline__bar--agileops-prod {
-  background: var(--color-agileops-prod);
-}
-
-/* Fallback for a pool the JS could not tokenize. */
-.timeline__bar--unknown {
+/* Bar fill = operational STATUS only. The pool class (timeline__bar--<token>)
+   and data-pool stay on the element as stable hooks for a future pool filter,
+   but carry no colour: pool identity lives in the chip. Unknown/other statuses
+   keep this neutral fill. */
+.timeline__bar {
   background: var(--bg-hover);
+  border: 1px solid var(--tl-bar-border, transparent);
+  color: var(--tl-bar-text, rgba(0,0,0,.7));
 }
 
-/* Status modifiers */
 .timeline__bar--pase-en-curso {
-  /* T13 (pedido del cliente, solo visual): verde muy claro con textura
-     diagonal casi imperceptible y acento lateral izquierdo. Todo se pinta
-     HACIA ADENTRO (fondos + outline) para no mover ni 1px las dimensiones
-     mapeadas a duracion — misma regla que .timeline__bar--derivado. El texto
-     hereda centrado/negrita/tamano de .timeline__bar. */
-  background-color: #ECFDF3;
-  background-image:
-    linear-gradient(to right, #16A34A 0 4px, transparent 4px),
-    repeating-linear-gradient(
-      135deg,
-      rgba(22, 163, 74, 0.035) 0px,
-      rgba(22, 163, 74, 0.035) 2px,
-      transparent 2px,
-      transparent 8px
-    );
-  background-size: 4px 100%, auto;
-  background-repeat: no-repeat;
-  outline: 1px solid #86D7A3;
-  outline-offset: -1px;
-  color: #166534;
+  --tl-bar-border: var(--tl-en-curso-border);
+  --tl-bar-text: var(--tl-en-curso-text);
+  background: var(--tl-en-curso-bg);
 }
 
 .timeline__bar--inicio-atrasado {
-  background: var(--color-warning);
-  color: var(--text-on-warning);
-  border: 2px solid var(--color-conflict);
+  --tl-bar-border: var(--tl-atrasado-border);
+  --tl-bar-text: var(--tl-atrasado-text);
+  background: var(--tl-atrasado-bg);
 }
 
-/* ---- Derivado: subtle dashed inner frame so it reads apart from
-   Implementación without changing layout (outline never shifts boxes) ---- */
+.timeline__bar--coordinado {
+  --tl-bar-border: var(--tl-coordinado-border);
+  --tl-bar-text: var(--tl-coordinado-text);
+  background: var(--tl-coordinado-bg);
+}
+
+/* ---- Derivado: dashed 2px frame on the WHOLE bar, whatever the status.
+   Status keeps its fill; the frame uses the status text colour so it stays
+   visible on every fill. A border (not outline) so it never collides with the
+   KPI flash outline, and border-box keeps the computed geometry intact. ---- */
 .timeline__bar--derivado {
-  outline: 1.5px dashed rgba(0,0,0,.45);
-  outline-offset: -3px;
+  border: 2px dashed var(--tl-bar-text, rgba(0,0,0,.7));
 }
-
 /* ---- KPI filter: dimmed bars ---- */
 .timeline__bar--dimmed {
   opacity: 0.15;
@@ -437,31 +410,52 @@
     padding: 0 4px;
   }
 }
-/* ---- Pool chip: pool identity on every bar, independent of status colour ---- */
+/* ---- Pool chip: pool identity on every bar, independent of status ----
+   Dark pill + accent stripe. Colour is the pool; the bar fill is the status. */
 .timeline__pool-chip {
   flex: 0 0 auto;
   margin-right: 6px;
-  padding: 0 4px;
-  border: 1px solid rgba(0, 0, 0, 0.35);
+  padding: 0 5px 0 4px;
+  border-left: 3px solid var(--tl-chip-accent-default);
   border-radius: 3px;
-  font-size: 8px;
-  font-weight: 800;
-  line-height: 12px;
+  background: var(--tl-chip-bg);
+  color: var(--tl-chip-text);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
   letter-spacing: 0.3px;
-  color: #1E293B;
-  background: var(--bg-hover);
+  text-transform: uppercase;
 }
 
-/* Narrow bars: colour-only square, no text */
+/* Medium bars: accent square only, the ticket keeps the room */
 .timeline__pool-chip--dot {
   width: 8px;
   height: 8px;
   padding: 0;
   margin-right: 4px;
-  box-sizing: border-box;
+  border: 0;
+  border-radius: 2px;
+  background: var(--tl-chip-accent-default);
 }
 
-.timeline__pool-chip--yape          { background: var(--color-yape); }
-.timeline__pool-chip--sf            { background: var(--color-sf); }
-.timeline__pool-chip--agileops-oro  { background: var(--color-agileops-oro); }
-.timeline__pool-chip--agileops-prod { background: var(--color-agileops-prod); }
+.timeline__pool-chip--yape          { border-left-color: var(--tl-chip-accent-yape); }
+.timeline__pool-chip--sf            { border-left-color: var(--tl-chip-accent-sf); }
+.timeline__pool-chip--agileops-oro  { border-left-color: var(--tl-chip-accent-agileops-oro); }
+.timeline__pool-chip--agileops-prod { border-left-color: var(--tl-chip-accent-agileops-prod); }
+.timeline__pool-chip--dot.timeline__pool-chip--yape          { background: var(--tl-chip-accent-yape); }
+.timeline__pool-chip--dot.timeline__pool-chip--sf            { background: var(--tl-chip-accent-sf); }
+.timeline__pool-chip--dot.timeline__pool-chip--agileops-oro  { background: var(--tl-chip-accent-agileops-oro); }
+.timeline__pool-chip--dot.timeline__pool-chip--agileops-prod { background: var(--tl-chip-accent-agileops-prod); }
+
+/* Secondary DERIVADO tag: only drawn when the bar is wide enough */
+.timeline__derivado-tag {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  padding: 0 4px;
+  border: 1px dashed currentColor;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 12px;
+  letter-spacing: 0.4px;
+}
