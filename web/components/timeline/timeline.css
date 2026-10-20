@@ -437,3 +437,31 @@
     padding: 0 4px;
   }
 }
+/* ---- Pool chip: pool identity on every bar, independent of status colour ---- */
+.timeline__pool-chip {
+  flex: 0 0 auto;
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 12px;
+  letter-spacing: 0.3px;
+  color: #1E293B;
+  background: var(--bg-hover);
+}
+
+/* Narrow bars: colour-only square, no text */
+.timeline__pool-chip--dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  margin-right: 4px;
+  box-sizing: border-box;
+}
+
+.timeline__pool-chip--yape          { background: var(--color-yape); }
+.timeline__pool-chip--sf            { background: var(--color-sf); }
+.timeline__pool-chip--agileops-oro  { background: var(--color-agileops-oro); }
+.timeline__pool-chip--agileops-prod { background: var(--color-agileops-prod); }

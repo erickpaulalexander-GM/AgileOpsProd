@@ -54,6 +54,25 @@ window.Timeline = (function () {
   var UNKNOWN_POOL = 'Unknown';       // pool label when a bar carries none
   var UNKNOWN_POOL_KEY = 'unknown';   // CSS token for UNKNOWN_POOL
 
+  /* Short on-bar pool tag. Keyed by the CSS token from _poolKey; a pool outside
+     this table falls back to the first 3 letters of its name, so a new pool
+     still gets a tag without a code change. */
+  var POOL_TAG = { 'yape': 'YAPE', 'sf': 'S&F', 'agileops-oro': 'ORO', 'agileops-prod': 'PROD' };
+  function _poolTag(pool) {
+    var key = _poolKey(pool);
+    if (POOL_TAG[key]) return POOL_TAG[key];
+    return String(pool || UNKNOWN_POOL).replace(/[^A-Za-z0-9&]/g, '').slice(0, 3).toUpperCase();
+  }
+
+  /* Chip inside the bar: the status colour owns the bar background, so the pool
+     needs its own always-visible marker. Label shrinks with the bar width. */
+  function _poolChipHtml(pool, width) {
+    var tag = _poolTag(pool);
+    var mod = width >= 90 ? '' : ' timeline__pool-chip--dot';
+    return '<span class="timeline__pool-chip timeline__pool-chip--' + _poolKey(pool) + mod + '" aria-hidden="true">'
+      + (mod ? '' : _esc(tag)) + '</span>';
+  }
+
   /* =========================================================
      STATE
      ========================================================= */
@@ -122,7 +141,8 @@ window.Timeline = (function () {
    * The value is mirrored into --timeline-grid-30min so CSS min-widths agree.
    */
   function _fitScale() {
-    var avail = _container ? _container.clientWidth - _labelWidth() : 0;
+    // -2: border/rounding safety so the axis never triggers a stray scrollbar.
+    var avail = _container ? _container.clientWidth - _labelWidth() - 2 : 0;
     var cell = avail > 0 ? Math.floor((avail / (VIEW_MINUTES / CELL_MIN)) * 100) / 100 : CELL_PX;
     _cellPx = Math.max(CELL_PX, cell);
     if (_container && _container.style && _container.style.setProperty) _container.style.setProperty('--timeline-grid-30min', _cellPx + 'px');
@@ -398,8 +418,9 @@ window.Timeline = (function () {
               + ' data-ticket="' + _esc(bar.ticket) + '"'
               + ' data-idx="' + bar._idx + '"'
               + ' data-status="' + _esc(bar.status) + '"'
-              + ' title="' + _esc(bar.ticket) + ' — ' + _esc(bar.name) + ' (' + bar.duration + ' min)' + (bar.type === 'derivado' ? ' · Derivado' : '') + '"'
+              + ' title="' + _esc(bar.ticket) + ' — ' + _esc(bar.name) + ' · ' + _esc(bar.pool) + ' (' + bar.duration + ' min)' + (bar.type === 'derivado' ? ' · Derivado' : '') + '"'
               + ' role="button" tabindex="0">'
+              + _poolChipHtml(bar.pool, width)
               + (width < 56 ? '' : _esc(bar.ticket))   // too narrow to read; the tooltip has it
               + '</div>';
           });
