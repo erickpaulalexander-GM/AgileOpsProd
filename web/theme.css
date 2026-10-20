@@ -881,7 +881,7 @@ body {
   font-size: 11px;
 }
 .tf-input--date { min-width: 0; width: 100%; color-scheme: light dark; }
-/* Date filter: label above the input so the ~130px datetime field fits the
+/* Date filter: label above the control so the ~130px date select fits the
    ~135px column instead of overflowing it (label inline was 166px wide). */
 .tf-date { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .tf-date > span {

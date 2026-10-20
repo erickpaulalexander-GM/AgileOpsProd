@@ -120,6 +120,44 @@ window.OpsTable = (function () {
     return true;
   }
 
+  /** "2026-10-19T20:00" -> "19/10 20:00": the same format the cells display. */
+  function _stampLabel(v) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})$/.exec(String(v || ''));
+    return m ? (m[3] + '/' + m[2] + ' ' + m[4]) : String(v || '');
+  }
+
+  /** epoch ms -> "YYYY-MM-DDTHH:MM", the value a datetime control carries. */
+  function _localStamp(ms) {
+    var d = new Date(ms);
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+      + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  /**
+   * The ONLY values INICIO/FIN may offer: the timestamps present in the rows,
+   * chronological and deduped. Anything the source file does not contain is
+   * not a real pass time, so it is never invented. `other` narrows the list to
+   * the side of the range the opposite bound has not excluded yet.
+   */
+  function dateOptions(items, key, other) {
+    var msKey = key === 'fin' ? 'endMs' : 'startMs';
+    var fromMs = other && other.from ? _dateBound(other.from) : NaN;
+    var toMs = other && other.to ? _dateBound(other.to) : NaN;
+    var seen = {}, out = [];
+    (items || []).forEach(function (it) {
+      var ms = it[msKey];
+      if (isNaN(ms)) return;                        // unparseable: no option
+      if (!isNaN(fromMs) && ms < fromMs) return;    // beyond the other bound
+      if (!isNaN(toMs) && ms > toMs) return;
+      if (seen[ms]) return;
+      seen[ms] = 1;
+      out.push({ ms: ms, value: _localStamp(ms) });
+    });
+    out.sort(function (a, b) { return a.ms - b.ms; });
+    return out.map(function (o) { return o.value; });
+  }
+
   function filtersActive(f) {
     return !!(f.resp || f.ticket || f.app || f.pools.length || f.tipos.length || f.estados.length
       || f.inicio.from || f.inicio.to || f.fin.from || f.fin.to);
@@ -273,16 +311,34 @@ window.OpsTable = (function () {
       body = '<span class="tf-chips" data-slot="' + field + '">'
         + _optionChips(field, _valueOptions[field], f[field]) + '</span>';
     } else {
-      body = '<span class="tf-dates">'
-        + '<label class="tf-date"><span>Desde</span>'
-        + '<input type="datetime-local" class="tf-input tf-input--date" data-f="' + col.key + '-from"'
-        + ' value="' + _esc(f[col.key].from) + '" aria-label="' + _esc(col.label) + ' desde"></label>'
-        + '<label class="tf-date"><span>Hasta</span>'
-        + '<input type="datetime-local" class="tf-input tf-input--date" data-f="' + col.key + '-to"'
-        + ' value="' + _esc(f[col.key].to) + '" aria-label="' + _esc(col.label) + ' hasta"></label>'
-        + '</span>';
+      body = _dateFilterBody(col);
     }
     return '<td data-col="' + col.key + '"><div class="tf-cell">' + body + reset + '</div></td>';
+  }
+
+  /** One <select> per bound, offering ONLY the timestamps the data has.
+      Each side is narrowed by the opposite bound: a "desde" later than
+      "hasta" can only ever yield an empty result, so it is not offered. */
+  function _dateFilterBody(col) {
+    var f = _state.filters;
+    var _dateSel = function (side, other) {
+      var chosen = f[col.key][side];
+      var opts = dateOptions(_items, col.key, other);
+      if (chosen && opts.indexOf(chosen) === -1) opts = [chosen].concat(opts);
+      return '<label class="tf-date"><span>' + (side === 'from' ? 'Desde' : 'Hasta') + '</span>'
+        + '<select class="tf-input tf-input--date" data-f="' + col.key + '-' + side + '"'
+        + ' aria-label="' + _esc(col.label) + ' ' + (side === 'from' ? 'desde' : 'hasta') + '">'
+        + '<option value="">Sin l\u00edmite</option>'
+        + opts.map(function (v) {
+            return '<option value="' + _esc(v) + '"' + (v === chosen ? ' selected' : '') + '>'
+              + _esc(_stampLabel(v)) + '</option>';
+          }).join('')
+        + '</select></label>';
+    };
+    return '<span class="tf-dates">'
+      + _dateSel('from', f[col.key].to)
+      + _dateSel('to', f[col.key].from)
+      + '</span>';
   }
 
   function _buildHead() {
@@ -296,11 +352,20 @@ window.OpsTable = (function () {
     _headBuilt = true;
   }
 
-  /** Re-render only the value chips whose option list depends on the data. */
+  /** Re-render only the controls whose option list depends on the data. */
   function _refreshValueChips() {
     ['tipos', 'estados'].forEach(function (field) {
       var slot = _opts.head.querySelector('[data-slot="' + field + '"]');
       if (slot) slot.innerHTML = _optionChips(field, _valueOptions[field], _state.filters[field]);
+    });
+    // The date <select>s are rebuilt from the same rows, so a group change
+    // must re-offer only the timestamps still present in the visible data.
+    ['inicio', 'fin'].forEach(function (key) {
+      var cell = _opts.head.querySelector('td[data-col="' + key + '"]');
+      if (!cell) return;
+      var col = { key: key, filter: 'date', label: key === 'inicio' ? 'Inicio Impl' : 'Fin Impl' };
+      var reset = cell.querySelector('.tf-reset');
+      cell.querySelector('.tf-cell').innerHTML = _dateFilterBody(col) + (reset ? reset.outerHTML : '');
     });
   }
 
@@ -346,11 +411,12 @@ window.OpsTable = (function () {
       case 'estado': f.estados = []; break;
       case 'inicio': case 'fin': f[key] = { from: '', to: '' }; break;
     }
-    // Reflect text/date inputs (chips are synced by _syncControls).
+    // Reflect text/date controls (chips are synced by _syncControls). Both
+    // INPUT and SELECT carry [data-f]; a <select> reset returns to its
+    // "Sin l\u00edmite" option, whose value is the empty string.
     var inputs = _opts.head.querySelectorAll('[data-f]');
     for (var i = 0; i < inputs.length; i++) {
       var name = inputs[i].getAttribute('data-f');
-      if (inputs[i].tagName !== 'INPUT') continue;
       if (name === key) inputs[i].value = '';
       if (name === key + '-from' || name === key + '-to') inputs[i].value = '';
     }
@@ -364,10 +430,12 @@ window.OpsTable = (function () {
   function _onHeadInput(e) {
     var t = e.target;
     var name = t.getAttribute && t.getAttribute('data-f');
-    if (!name || t.tagName !== 'INPUT') return;
+    // Both text inputs and the date <select>s drive the filters.
+    if (!name || (t.tagName !== 'INPUT' && t.tagName !== 'SELECT')) return;
     var f = _state.filters;
     var m = /^(inicio|fin)-(from|to)$/.exec(name);
-    if (m) f[m[1]][m[2]] = t.value;
+    // A <select> only offers real source timestamps; "" means "Sin l\u00edmite".
+    if (m) f[m[1]][m[2]] = t.value || '';
     else f[name] = t.value;
     _render();
   }
@@ -391,8 +459,12 @@ window.OpsTable = (function () {
 
   function _clearAll() {
     _state.filters = _blankFilters();
-    var inputs = _opts.head.querySelectorAll('input');
-    for (var i = 0; i < inputs.length; i++) inputs[i].value = '';
+    // Every filter control, text input or date <select>, returns to its
+    // empty value ("Sin l\u00edmite" for the date selects).
+    var controls = _opts.head.querySelectorAll('[data-f]');
+    for (var i = 0; i < controls.length; i++) {
+      if (controls[i].tagName === 'INPUT' || controls[i].tagName === 'SELECT') controls[i].value = '';
+    }
     _render();
   }
 
@@ -531,6 +603,7 @@ window.OpsTable = (function () {
       parseRowDate: parseRowDate, refFromMeta: refFromMeta, enrich: enrich,
       applyFilters: applyFilters, overlapsWindow: overlapsWindow,
       sortItems: sortItems, project: project, blankFilters: _blankFilters,
+      dateOptions: dateOptions,
     },
   };
 })();

@@ -45,8 +45,15 @@ const out={
  comboNext: tk(P.project(items,st({mode:'next',filters:f({pools:['sf']})}),ref)),
  sortDesc: tk(P.project(items,st({mode:'all',sort:{key:'inicio',dir:'desc'}}),ref)),
  sortFin: tk(P.project(items,st({mode:'all',sort:{key:'fin',dir:'asc'}}),ref)),
- yearWrap: new Date(P.parseRowDate('02/01 10:00',P.refFromMeta({updatedAt:'2026-12-31T23:00:00'}))).getFullYear(),
- badDate: [P.parseRowDate('31/02 10:00',ref),P.parseRowDate('x',ref)].map(Number.isNaN),
+  yearWrap: new Date(P.parseRowDate('02/01 10:00',P.refFromMeta({updatedAt:'2026-12-31T23:00:00'}))).getFullYear(),
+  badDate: [P.parseRowDate('31/02 10:00',ref),P.parseRowDate('x',ref)].map(Number.isNaN),
+  dIni: P.dateOptions(items,'inicio'),
+  dFin: P.dateOptions(items,'fin'),
+  dIniNoSf: P.dateOptions(items.filter(i=>i.poolId!=='sf'),'inicio'),
+  dAfter: P.dateOptions(items,'inicio',{from:'2026-10-19T20:00'}),
+  dBefore: P.dateOptions(items,'fin',{to:'2026-10-19T21:00'}),
+  dEmpty: P.dateOptions([], 'inicio'),
+  dBadOnly: P.dateOptions(P.enrich(rows.filter(r=>r.inicio_impl==='bad'),ref),'inicio'),
 };
 console.log(JSON.stringify(out));
 '''
@@ -76,6 +83,52 @@ def test_table_pipeline(tmp_path):
     assert d["sortFin"] == ["OCD-3", "OCD-1", "OCD-2", "OCD-4", "OCD-5", "OCD-6"]
     assert d["yearWrap"] == 2027
     assert d["badDate"] == [True, True]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_date_filter_offers_only_source_dates(tmp_path):
+    """INICIO/FIN filters must offer ONLY the timestamps that exist in the data
+    (a <select>, not free typing), in chronological order, derived from the
+    visible rows and narrowed by the opposite bound of the range."""
+    probe = tmp_path / "probe.js"
+    probe.write_text(PROBE, encoding="utf-8")
+    out = subprocess.run(
+        ["node", str(probe), str(ROOT / "web/components/timeline/timeline.js"),
+         str(ROOT / "web/components/table/table.js")],
+        capture_output=True, text=True, check=True, encoding="utf-8")
+    d = json.loads(out.stdout)
+
+    # Only real source values, chronological (20:00 before 20:15, not lexicographic)
+    assert d["dIni"] == ["2026-10-19T16:00", "2026-10-19T18:00",
+                         "2026-10-19T20:00", "2026-10-19T20:15",
+                         "2026-11-09T01:00"]           # OCD-6, three weeks out
+    # FIN offers its OWN column's values, not INICIO's
+    assert d["dFin"] == ["2026-10-19T19:15", "2026-10-19T20:00",
+                         "2026-10-19T21:00", "2026-10-19T22:00",
+                         "2026-11-09T02:00"]           # OCD-6
+
+    # Unparseable dates ("bad") are never invented into the catalogue
+    assert d["dBadOnly"] == []
+
+    # Options follow the visible rows: without S&F, its 20:00 start is gone
+    # (2026-10-19T20:00 belonged to OCD-2 alone), while OCD-4 keeps 20:15.
+    assert "2026-10-19T20:00" in d["dIni"]
+    assert "2026-10-19T20:00" not in d["dIniNoSf"]
+    assert "2026-10-19T20:15" in d["dIniNoSf"]
+    # ...but OCD-2 (S&F) also owns the 20:00 FIN shared with OCD-4 (ORO)
+    assert "2026-10-19T20:00" in d["dFin"]
+
+    # A bound narrows the opposite side: nothing earlier than 20:00 is offered.
+    # (2026-11-09T01:00 is OCD-6, legitimately after the bound, so it stays.)
+    assert d["dAfter"][0] == "2026-10-19T20:00"
+    assert "2026-10-19T18:00" not in d["dAfter"] and "2026-10-19T16:00" not in d["dAfter"]
+    assert "2026-10-19T20:15" in d["dAfter"]
+    # ...and the reverse: a FIN "hasta" of 21:00 leaves every earlier FIN
+    # available for "desde", and drops the later ones (22:00, OCD-6's 02:00).
+    assert d["dBefore"][0] == "2026-10-19T19:15"
+    assert d["dBefore"][-1] == "2026-10-19T21:00"
+    assert "2026-10-19T22:00" not in d["dBefore"] and "2026-11-09T02:00" not in d["dBefore"]
+    assert d["dEmpty"] == []
 
 
 def _css_block(css, selector):
@@ -120,3 +173,63 @@ def test_date_filter_cell_fits_the_column():
     reset = _css_block(css, ".tf-reset[hidden]")
     assert any(d.startswith("visibility: hidden") for d in reset), \
         "hidden reset must stay in layout (display:none makes the row reflow)"
+
+
+SOURCE = ROOT / "workspace" / "output" / "dashboard_data.json"
+
+# Same harness as PROBE, but the rows come from the generated contract file
+# (argv[4]) instead of a hand-written fixture.
+SOURCE_PROBE = r'''
+const fs=require('fs'), vm=require('vm');
+const sb={console,Math,JSON,Date,parseInt,isNaN,String,Object,Array,RegExp,Number};
+sb.window=sb;
+sb.document={createElement(){const e={};Object.defineProperty(e,'textContent',{set(v){this.innerHTML=String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}});return e;},
+  getElementById(){return null;},querySelectorAll(){return {forEach(){}};},addEventListener(){},documentElement:{},head:{},readyState:'complete'};
+sb.getComputedStyle=()=>({getPropertyValue:()=>''});
+vm.createContext(sb);
+for (const f of process.argv.slice(2,4)) vm.runInContext(fs.readFileSync(f,'utf8'), sb);
+const P=sb.window.OpsTable._pure;
+const data=JSON.parse(fs.readFileSync(process.argv[4],'utf8'));
+const ref=P.refFromMeta(data.meta);
+const items=P.enrich(data.table, ref);
+console.log(JSON.stringify({ini:P.dateOptions(items,'inicio'), fin:P.dateOptions(items,'fin')}));
+'''
+
+
+def _stamp(ddmm_hhmm):
+    """'20/10 15:00' -> '2026-10-20T15:00'. The contract carries no year, so
+    the fixture year is pinned here; the run clock supplies it at runtime."""
+    day, mon = ddmm_hhmm[0:2], ddmm_hhmm[3:5]
+    return f"2026-{mon}-{day}T{ddmm_hhmm[6:]}"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_date_filters_match_the_source_file(tmp_path):
+    """The generated dashboard's INICIO/FIN filters must offer EXACTLY the
+    timestamps present in the source data — no invented times, no missing
+    ones, and in chronological order.
+
+    This pins the real workspace file rather than a synthetic fixture: the
+    filters are a view of the source, so any divergence is a bug."""
+    if not SOURCE.exists():
+        pytest.skip("workspace/output/dashboard_data.json not generated yet")
+    data = json.loads(SOURCE.read_text(encoding="utf-8"))
+    rows = data["table"]
+
+    expected_ini = sorted({_stamp(r["inicio_impl"]) for r in rows if r.get("inicio_impl")})
+    expected_fin = sorted({_stamp(r["fin_impl"]) for r in rows if r.get("fin_impl")})
+    if not expected_ini:
+        pytest.skip("source file has no dated rows")
+
+    probe = tmp_path / "probe_source.js"
+    probe.write_text(SOURCE_PROBE, encoding="utf-8")
+    out = subprocess.run(
+        ["node", str(probe), str(ROOT / "web/components/timeline/timeline.js"),
+         str(ROOT / "web/components/table/table.js"), str(SOURCE)],
+        capture_output=True, text=True, check=True, encoding="utf-8")
+    got = json.loads(out.stdout)
+
+    assert got["ini"] == expected_ini
+    assert got["fin"] == expected_fin
+    # The year in the options must come from the run clock, never a hardcode.
+    assert got["ini"][0].startswith(str(data["meta"]["updatedAt"][:4]))
