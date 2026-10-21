@@ -292,17 +292,23 @@ console.log(JSON.stringify({
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-def test_date_filter_is_one_select_per_column(tmp_path):
-    """INICIO IMPL renders ONE "Desde" select (from-bound) and FIN IMPL ONE
-    "Hasta" select (to-bound) — never a two-sided range per column. The two
-    ends live on the two columns and narrow each other across them."""
+def _run_date_ui_probe(tmp_path):
+    """Run DATE_UI_PROBE (init + setRows on the DOM stub) and return its JSON."""
     probe = tmp_path / "date_ui_probe.js"
     probe.write_text(DATE_UI_PROBE, encoding="utf-8")
     out = subprocess.run(
         ["node", str(probe), str(ROOT / "web/components/timeline/timeline.js"),
          str(ROOT / "web/components/table/table.js")],
         capture_output=True, text=True, check=True, encoding="utf-8")
-    d = json.loads(out.stdout)
+    return json.loads(out.stdout)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_date_filter_is_one_select_per_column(tmp_path):
+    """INICIO IMPL renders ONE "Desde" select (from-bound) and FIN IMPL ONE
+    "Hasta" select (to-bound) — never a two-sided range per column. The two
+    ends live on the two columns and narrow each other across them."""
+    d = _run_date_ui_probe(tmp_path)
     h = d["headHtml"]
 
     # Exactly two date selects; each column keeps only its own bound.
@@ -334,3 +340,19 @@ def test_date_filter_is_one_select_per_column(tmp_path):
                                    "other": {"to": "2026-10-19T21:00"}}
     assert d["specFinBounded"] == {"side": "to", "label": "Hasta",
                                    "other": {"from": "2026-10-19T20:00"}}
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_pool_filter_chips_show_catalog_only(tmp_path):
+    """The POOL filter bar renders exactly the pool catalog — no SIN POOL chip.
+
+    Rows reach the UI only after the exact RECURSO whitelist
+    (column_map.IN_SCOPE_POOL_KEYS, built from the same family table), so
+    pool is always a catalog family and the neutral bucket is unreachable.
+    """
+    d = _run_date_ui_probe(tmp_path)
+    h = d["headHtml"]
+
+    chips = re.findall(r'data-f="pools" data-v="([^"]+)"', h)
+    assert chips == ["yape", "sf", "agileops-oro", "agileops-prod"]
+    assert "SIN POOL" not in h

@@ -298,11 +298,12 @@ window.OpsTable = (function () {
   }
 
   function _poolChips(selected) {
+    // Catalog only — never a SIN POOL bucket: rows reach the UI after the
+    // exact RECURSO whitelist (python column_map), so pool is always one of
+    // the catalog families and a blank/Unknown bucket can never hold a row.
     var T = window.Timeline;
     var cat = (T && T.poolCatalog) ? T.poolCatalog() : [];
-    var noneId = (T && T.poolNoneId) || NONE_POOL_ID;
-    var entries = cat.map(function (c) { return { id: c.id, tag: c.tag }; })
-      .concat([{ id: noneId, tag: 'SIN POOL' }]);
+    var entries = cat.map(function (c) { return { id: c.id, tag: c.tag }; });
     return entries.map(function (e) {
       return '<button type="button" class="tf-chip tf-chip--pool" data-f="pools" data-v="' + _esc(e.id) + '"'
         + ' aria-pressed="' + (selected.indexOf(e.id) !== -1) + '" title="' + _esc(e.tag) + '">'
