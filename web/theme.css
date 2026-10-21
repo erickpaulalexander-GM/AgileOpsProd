@@ -246,6 +246,17 @@ body {
   color: var(--text-primary);
 }
 
+/* Title link (SharePoint schedules folder): identical look at rest,
+   underline on hover to signal it is clickable. */
+.topbar h1 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.topbar h1 a:hover {
+  text-decoration: underline;
+}
+
 .topbar-meta {
   display: flex;
   align-items: center;
