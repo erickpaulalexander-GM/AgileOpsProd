@@ -79,40 +79,46 @@
       </div>
     </section>
 
-    <!-- TIMELINE LEGEND — lane states plus (A9) pool, status, derivado, conflict -->
+    <!-- TIMELINE LEGEND — three wrap-as-a-unit groups: Pool | Estados | Señales -->
     <section class="timeline-legend" id="timeline-legend" aria-label="Leyenda del Timeline">
       <span class="timeline-legend__title">Leyenda del Timeline:</span>
-      <span class="timeline-legend__item">
-        <strong>Pool</strong>
-        <span class="timeline-legend__pools" id="timeline-legend-pools"></span>
+      <span class="timeline-legend__group">
+        <span class="timeline-legend__item">
+          <strong>Pool</strong>
+          <span class="timeline-legend__pools" id="timeline-legend-pools"></span>
+        </span>
       </span>
-      <span class="timeline-legend__item">
-        <span class="timeline-legend__swatch timeline-legend__swatch--off" aria-hidden="true"></span>
-        <span><strong>Fuera de turno</strong> — Recurso no disponible</span>
+      <span class="timeline-legend__group">
+        <span class="timeline-legend__item">
+          <span class="timeline-legend__swatch timeline-legend__swatch--off" aria-hidden="true"></span>
+          <span><strong>Fuera de turno</strong> — Recurso no disponible</span>
+        </span>
+        <span class="timeline-legend__item">
+          <span class="timeline-legend__swatch timeline-legend__swatch--free" aria-hidden="true"></span>
+          <span><strong>Disponible</strong> — Dentro de turno, sin pase</span>
+        </span>
+        <span class="timeline-legend__item">
+          <span class="timeline-legend__swatch timeline-legend__swatch--en-curso" aria-hidden="true"></span>
+          <span><strong>Pase en curso</strong></span>
+        </span>
+        <span class="timeline-legend__item">
+          <span class="timeline-legend__swatch timeline-legend__swatch--atrasado" aria-hidden="true"></span>
+          <span><strong>Inicio atrasado</strong></span>
+        </span>
+        <span class="timeline-legend__item">
+          <span class="timeline-legend__swatch timeline-legend__swatch--coordinado" aria-hidden="true"></span>
+          <span><strong>Coordinado</strong></span>
+        </span>
       </span>
-      <span class="timeline-legend__item">
-        <span class="timeline-legend__swatch timeline-legend__swatch--free" aria-hidden="true"></span>
-        <span><strong>Disponible</strong> — Dentro de turno, sin pase</span>
-      </span>
-      <span class="timeline-legend__item">
-        <span class="timeline-legend__swatch timeline-legend__swatch--en-curso" aria-hidden="true"></span>
-        <span><strong>Pase en curso</strong></span>
-      </span>
-      <span class="timeline-legend__item">
-        <span class="timeline-legend__swatch timeline-legend__swatch--atrasado" aria-hidden="true"></span>
-        <span><strong>Inicio atrasado</strong></span>
-      </span>
-      <span class="timeline-legend__item">
-        <span class="timeline-legend__swatch timeline-legend__swatch--coordinado" aria-hidden="true"></span>
-        <span><strong>Coordinado</strong></span>
-      </span>
-      <span class="timeline-legend__item">
-        <span class="timeline-legend__swatch timeline-legend__swatch--derivado" aria-hidden="true"></span>
-        <span><strong>Derivado</strong> — Borde discontinuo = pase derivado</span>
-      </span>
-      <span class="timeline-legend__item">
-        <span class="timeline-legend__conflict" aria-hidden="true">⚠</span>
-        <span><strong>Conflicto</strong> — Mismo responsable, horarios solapados</span>
+      <span class="timeline-legend__group">
+        <span class="timeline-legend__item">
+          <span class="timeline-legend__swatch timeline-legend__swatch--derivado" aria-hidden="true"></span>
+          <span><strong>Derivado</strong> — Borde discontinuo = pase derivado</span>
+        </span>
+        <span class="timeline-legend__item">
+          <span class="timeline-legend__conflict" aria-hidden="true">⚠</span>
+          <span><strong>Conflicto</strong> — Mismo responsable, horarios solapados</span>
+        </span>
       </span>
     </section>
 

@@ -435,10 +435,14 @@ body {
 }
 
 /* ----------------------------------------------  kpi cards  */
+/* Legend: centered rows; groups (Pool | Estados | Señales) wrap as whole
+   units. The container column gap (26px) is wider than the inner group gap
+   (16px) so grouping reads without dividers that would dangle on wrap. */
 .timeline-legend {
   display: flex;
   align-items: center;
-  gap: 18px;
+  justify-content: center;
+  gap: 12px 26px;
   flex-wrap: wrap;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -453,6 +457,13 @@ body {
 .timeline-legend__title {
   font-weight: 700;
   color: var(--text-primary);
+}
+
+.timeline-legend__group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 16px;
 }
 
 .timeline-legend__item {
