@@ -158,6 +158,20 @@ window.OpsTable = (function () {
     return out.map(function (o) { return o.value; });
   }
 
+  /**
+   * The single bound each date column offers, and the opposite end that
+   * narrows it. INICIO IMPL gets `from` ("Desde") and FIN IMPL gets `to`
+   * ("Hasta") — one filter per column, never a two-sided range twice. The
+   * range's two ends live on the two columns, so they narrow each other:
+   * with inicio <= fin on every row, a "Desde" later than the "Hasta" can
+   * only ever yield an empty result, so it is not offered.
+   */
+  function dateFilterSpec(colKey, finTo, iniFrom) {
+    return colKey === 'inicio'
+      ? { side: 'from', label: 'Desde', other: finTo ? { to: finTo } : null }
+      : { side: 'to', label: 'Hasta', other: iniFrom ? { from: iniFrom } : null };
+  }
+
   function filtersActive(f) {
     return !!(f.resp || f.ticket || f.app || f.pools.length || f.tipos.length || f.estados.length
       || f.inicio.from || f.inicio.to || f.fin.from || f.fin.to);
@@ -316,28 +330,25 @@ window.OpsTable = (function () {
     return '<td data-col="' + col.key + '"><div class="tf-cell">' + body + reset + '</div></td>';
   }
 
-  /** One <select> per bound, offering ONLY the timestamps the data has.
-      Each side is narrowed by the opposite bound: a "desde" later than
-      "hasta" can only ever yield an empty result, so it is not offered. */
+  /** One <select> per date column: INICIO renders only a "Desde" bound,
+      FIN only a "Hasta" one. Options are EXACTLY the timestamps the data
+      has, narrowed by the opposite column's bound. */
   function _dateFilterBody(col) {
     var f = _state.filters;
-    var _dateSel = function (side, other) {
-      var chosen = f[col.key][side];
-      var opts = dateOptions(_items, col.key, other);
-      if (chosen && opts.indexOf(chosen) === -1) opts = [chosen].concat(opts);
-      return '<label class="tf-date"><span>' + (side === 'from' ? 'Desde' : 'Hasta') + '</span>'
-        + '<select class="tf-input tf-input--date" data-f="' + col.key + '-' + side + '"'
-        + ' aria-label="' + _esc(col.label) + ' ' + (side === 'from' ? 'desde' : 'hasta') + '">'
-        + '<option value="">Sin l\u00edmite</option>'
-        + opts.map(function (v) {
-            return '<option value="' + _esc(v) + '"' + (v === chosen ? ' selected' : '') + '>'
-              + _esc(_stampLabel(v)) + '</option>';
-          }).join('')
-        + '</select></label>';
-    };
+    var spec = dateFilterSpec(col.key, f.fin.to, f.inicio.from);
+    var chosen = f[col.key][spec.side];
+    var opts = dateOptions(_items, col.key, spec.other);
+    if (chosen && opts.indexOf(chosen) === -1) opts = [chosen].concat(opts);
     return '<span class="tf-dates">'
-      + _dateSel('from', f[col.key].to)
-      + _dateSel('to', f[col.key].from)
+      + '<label class="tf-date"><span>' + spec.label + '</span>'
+      + '<select class="tf-input tf-input--date" data-f="' + col.key + '-' + spec.side + '"'
+      + ' aria-label="' + _esc(col.label) + ' ' + spec.label.toLowerCase() + '">'
+      + '<option value="">Sin l\u00edmite</option>'
+      + opts.map(function (v) {
+          return '<option value="' + _esc(v) + '"' + (v === chosen ? ' selected' : '') + '>'
+            + _esc(_stampLabel(v)) + '</option>';
+        }).join('')
+      + '</select></label>'
       + '</span>';
   }
 
@@ -604,6 +615,7 @@ window.OpsTable = (function () {
       applyFilters: applyFilters, overlapsWindow: overlapsWindow,
       sortItems: sortItems, project: project, blankFilters: _blankFilters,
       dateOptions: dateOptions,
+      dateFilterSpec: dateFilterSpec,
     },
   };
 })();

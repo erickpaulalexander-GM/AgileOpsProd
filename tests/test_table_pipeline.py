@@ -233,3 +233,104 @@ def test_date_filters_match_the_source_file(tmp_path):
     assert got["fin"] == expected_fin
     # The year in the options must come from the run clock, never a hardcode.
     assert got["ini"][0].startswith(str(data["meta"]["updatedAt"][:4]))
+
+
+# Full-component probe: init + setRows against a minimal DOM stub, so the
+# RENDERED filter row is what gets pinned (not just the pure helpers).
+DATE_UI_PROBE = r'''
+const fs=require('fs'), vm=require('vm');
+const holder={};
+function el(tag){
+  const e={tagName:String(tag).toUpperCase(), attrs:{}, style:{}, children:[],
+    classList:{add(){},remove(){},contains(){return false;}},
+    setAttribute(k,v){this.attrs[k]=String(v);},
+    getAttribute(k){return k in this.attrs?this.attrs[k]:null;},
+    hasAttribute(k){return k in this.attrs;},
+    addEventListener(){}, appendChild(c){this.children.push(c);return c;},
+    querySelector(){return null;}, querySelectorAll(){return {length:0, forEach(){}};},
+    closest(){return null;}};
+  Object.defineProperty(e,'innerHTML',{get(){return this._html||'';},
+    set(v){this._html=String(v); if(this.id) holder[this.id]=this._html;}});
+  // _esc() round-trips text through a real <div>: set textContent, read
+  // innerHTML back. A real DOM escapes the five specials; mirror that or
+  // every option value silently reads back as "".
+  Object.defineProperty(e,'textContent',{get(){return this._t||'';},
+    set(v){this._t=String(v==null?'':v);
+      this._html=this._t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}});
+  return e;
+}
+const head=el('thead'); head.id='table-head';
+const body=el('tbody'); body.id='table-body';
+const toolbar=el('div'); toolbar.id='table-toolbar';
+const byId={'table-head':head,'table-body':body,'table-toolbar':toolbar,
+  'tb-count':el('span'),'tb-mode':el('span'),'tb-toggle':el('button'),'tb-clear':el('button')};
+const sb={console,Math,JSON,Date,parseInt,isNaN,String,Object,Array,RegExp,Number};
+sb.window=sb;
+sb.document={createElement:el, getElementById:(id)=>byId[id]||null,
+  querySelectorAll(){return {forEach(){}};}, addEventListener(){},
+  documentElement:{}, head:el('head'), readyState:'complete'};
+sb.getComputedStyle=()=>({getPropertyValue:()=>''});
+vm.createContext(sb);
+for (const f of process.argv.slice(2,4)) vm.runInContext(fs.readFileSync(f,'utf8'), sb);
+const Ops=sb.window.OpsTable, P=Ops._pure;
+const meta={updatedAt:'2026-10-19T19:15:00'};
+const rows=[
+ {responsable:'Ana',pool:'AgileOps Prod',type:'Implementaci\u00f3n',ticket:'OCD-1',nombre_app:'DWLI',status:'Coordinado',inicio_impl:'19/10 16:00',fin_impl:'19/10 20:00'},
+ {responsable:'Dino',pool:'AgileOps ORO',type:'Implementaci\u00f3n',ticket:'OCD-4',nombre_app:'ALMR',status:'Coordinado',inicio_impl:'19/10 20:15',fin_impl:'19/10 22:00'},
+ {responsable:'Fer',pool:'Pool AgileOps Prod',type:'Implementaci\u00f3n',ticket:'OCD-6',nombre_app:'Y',status:'Coordinado',inicio_impl:'09/11 01:00',fin_impl:'09/11 02:00'},
+];
+Ops.init({head:head, body:body, toolbar:toolbar, jiraUrl:(t)=>'https://x/'+t});
+Ops.setRows(rows, meta, null);
+console.log(JSON.stringify({
+  headHtml: holder['table-head']||'',
+  specIni: P.dateFilterSpec('inicio','',''),
+  specFin: P.dateFilterSpec('fin','',''),
+  specIniBounded: P.dateFilterSpec('inicio','2026-10-19T21:00',''),
+  specFinBounded: P.dateFilterSpec('fin','','2026-10-19T20:00'),
+}));
+'''
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_date_filter_is_one_select_per_column(tmp_path):
+    """INICIO IMPL renders ONE "Desde" select (from-bound) and FIN IMPL ONE
+    "Hasta" select (to-bound) — never a two-sided range per column. The two
+    ends live on the two columns and narrow each other across them."""
+    probe = tmp_path / "date_ui_probe.js"
+    probe.write_text(DATE_UI_PROBE, encoding="utf-8")
+    out = subprocess.run(
+        ["node", str(probe), str(ROOT / "web/components/timeline/timeline.js"),
+         str(ROOT / "web/components/table/table.js")],
+        capture_output=True, text=True, check=True, encoding="utf-8")
+    d = json.loads(out.stdout)
+    h = d["headHtml"]
+
+    # Exactly two date selects; each column keeps only its own bound.
+    assert len(re.findall(r'<select class="tf-input tf-input--date"', h)) == 2
+    assert 'data-f="inicio-from"' in h and 'data-f="inicio-to"' not in h
+    assert 'data-f="fin-to"' in h and 'data-f="fin-from"' not in h
+
+    # Labels: INICIO -> "Desde", FIN -> "Hasta".
+    assert re.search(r'<span>Desde</span>\s*<select[^>]*data-f="inicio-from"', h)
+    assert re.search(r'<span>Hasta</span>\s*<select[^>]*data-f="fin-to"', h)
+    assert 'aria-label="Inicio Impl desde"' in h
+    assert 'aria-label="Fin Impl hasta"' in h
+
+    # Each select offers only its own column's source timestamps.
+    def options_of(name):
+        i = h.index('data-f="' + name + '"')
+        seg = h[i:h.index("</select>", i)]
+        return [v for v in re.findall(r'<option value="([^"]+)"', seg)]
+
+    assert options_of("inicio-from") == ["2026-10-19T16:00", "2026-10-19T20:15",
+                                         "2026-11-09T01:00"]
+    assert options_of("fin-to") == ["2026-10-19T20:00", "2026-10-19T22:00",
+                                    "2026-11-09T02:00"]
+
+    # The spec pins which opposite end narrows each column across columns.
+    assert d["specIni"] == {"side": "from", "label": "Desde", "other": None}
+    assert d["specFin"] == {"side": "to", "label": "Hasta", "other": None}
+    assert d["specIniBounded"] == {"side": "from", "label": "Desde",
+                                   "other": {"to": "2026-10-19T21:00"}}
+    assert d["specFinBounded"] == {"side": "to", "label": "Hasta",
+                                   "other": {"from": "2026-10-19T20:00"}}
