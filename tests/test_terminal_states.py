@@ -23,8 +23,14 @@ def test_is_terminal_known_states():
         "Anulado",
         "Registrado",
         "Pre Registrado",
-        "cerrado",          # case-insensitive
-        "TERMINADO",        # partial keyword
+        "Aprobado LT",       # approval family: inactive for operational KPIs
+        "Aprobado CL QA",
+        "Aprobado CL DEV",
+        "Aprobado PO",
+        "Aprobado Ops",
+        "Preaprobado",       # substring of "aprobado"
+        "cerrado",           # case-insensitive
+        "TERMINADO",         # partial keyword
     ]
     for state in terminal:
         assert is_terminal(state) is True, state
@@ -35,9 +41,7 @@ def test_is_terminal_operational_states():
     operational = [
         "Coordinado",
         "Pase en curso",
-        "Aprobado LT",
-        "Aprobado CL QA",
-        "Aprobado CL DEV",
+        "Ratificación total en curso",
         "Ratificación Parcial Satisfactorio",
         "",
         None,

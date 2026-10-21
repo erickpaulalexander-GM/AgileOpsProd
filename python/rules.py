@@ -9,9 +9,10 @@ ADR-012 (supersedes ADR-005's anchor): the temporal reference is
          the explicit --now override). The Excel mtime is diagnostic only and
          never reaches these rules.
 ADR-006: TERMINAL states (Cerrado, Terminado Satisfactorio, Rechazado,
-         Cancelado, Anulado, Registrado and equivalents) are EXCLUDED from the
-         operational KPIs and from conflict detection. They never produce
-         late starts, ratification alerts, or conflicts.
+         Cancelado, Anulado, Registrado, the approval family Aprobado *
+         and equivalents) are EXCLUDED from the operational KPIs and from
+         conflict detection. They never produce late starts, ratification
+         alerts, or conflicts.
 """
 
 from __future__ import annotations
@@ -27,9 +28,15 @@ logger = logging.getLogger(__name__)
 LATE_START_THRESHOLD = 5          # > 5 min past planned start while still Coordinado
 RATIFICATION_SOON_THRESHOLD = 10  # ≤ 10 min before ratification start = soon
 
-# ADR-006: terminal-state keywords (normalized: lowercase, no accents)
+# ADR-006 (enmienda 2026-10-21): terminal-state keywords (normalized:
+# lowercase, no accents)
 # NOTE: "registrado" also matches "Pre Registrado" by substring — intended,
 # both are pre-execution states excluded from operational KPIs.
+# NOTE: "aprobado" covers the whole approval family (Aprobado LT/CL QA/
+# CL DEV/PO/Ops) and "Preaprobado" — approval states are inactive work and
+# must not raise ratification alerts or conflicts (user report: "Aprobado LT"
+# leaking into the Ratificaciones vencidas KPI, tickets OCD-237620,
+# MVPLEGBCP-252621).
 TERMINAL_STATE_KEYWORDS = (
     "cerrado",
     "terminado",
@@ -37,6 +44,7 @@ TERMINAL_STATE_KEYWORDS = (
     "cancelado",
     "anulado",
     "registrado",
+    "aprobado",
 )
 
 
