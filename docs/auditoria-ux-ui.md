@@ -268,6 +268,21 @@ Esfuerzo: S = pequeño, M = medio (escala del informe original). Riesgo de regre
 - **Impacto:** posible desborde y poco espacio útil en pantallas pequeñas (no confirmado).
 - **Recomendación:** `flex-wrap` y altura mínima en el topbar. Reducir `--timeline-label-width` bajo 768px y añadir un breakpoint ~1100px. Verificar visualmente antes de actuar.
 - **Riesgo de regresión:** No evaluado en la auditoría original.
+- **Estado 2026-10-21 (auditoría responsive celular, verbatim del usuario: "audita el modo resposive
+  para la visualización desde un celular" → "si dale"):**
+  - **Implementado (H1/H2):** breakpoint `@media (max-width: 1100px)` que envuelve el topbar
+    (`flex-wrap: wrap`, `height: auto`, `min-height: var(--header-height)`) y su meta; bajo 768px,
+    `.pool-group__counts` con `min-width: 0` + `white-space: normal` y `.topbar-meta` con wrap —
+    la fila meta (~590px de footprints fijos: counts 46ch + select 18ch + badge 17ch) ya no
+    desborda el ancho de página en celulares. El topbar apilado fuerza `flex-wrap: nowrap`
+    (wrap en column crearía columnas horizontales). Tests: `tests/test_responsive_mobile.py`
+    (RED→GREEN), `pytest` 211 passed.
+  - **Backlog pendiente (sin validar visualmente):** (M1) reducir `--timeline-label-width`
+    (220px) bajo 768px — la gutter se lleva ~61% de una pantalla de 360px; (M2) tap targets
+    ≥44px para `.tb-btn`/`.tf-reset`/chips en mobile (hoy ~20px de alto); (L1) drawer
+    `width: 340px` fijo → `min(340px, 100vw - 16px)` en viewports de 320px; (L2) barras del
+    timeline bajan a 9px en móvil (contra la recomendación A13 de mantener ≥10px); (L3) KPIs
+    forzados a 2 columnas bajo 768px → a 320px cada card queda bajo su mínimo de 180px.
 
 ### A16 — Tema inicial y toggle
 - **Severidad / esfuerzo:** Baja / S

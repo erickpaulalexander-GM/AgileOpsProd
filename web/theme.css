@@ -796,6 +796,26 @@ body {
 }
 
 /* ----------------------------------------------  responsive  */
+/* Tablet / intermediate widths (H2 of the 2026-10-21 mobile audit): the
+   topbar meta carries FIXED footprints (counts 46ch + select 18ch +
+   badge 17ch ≈ 590px) that cannot live in a single 52px row between
+   769-1100px. Let the row wrap and the height grow BEFORE the phone
+   breakpoint. */
+@media (max-width: 1100px) {
+  .topbar {
+    height: auto;
+    min-height: var(--header-height);
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .topbar-meta {
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 768px) {
   :root {
     --content-padding: 10px;
@@ -806,11 +826,25 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  /* flex-wrap: nowrap overrides the 1100px block: in column direction a
+     wrap would create horizontal columns (items side by side). */
   .topbar {
     flex-direction: column;
+    flex-wrap: nowrap;
     height: auto;
     padding: 10px var(--content-padding);
     gap: 6px;
+  }
+
+  /* H1: the counts footprint (46ch ≈ 300px, nowrap) must never widen a
+     ~360px phone into a page-level horizontal scroll. Wrap the meta row
+     and let the counts text break onto its own lines. */
+  .topbar-meta {
+    flex-wrap: wrap;
+  }
+  .pool-group__counts {
+    min-width: 0;
+    white-space: normal;
   }
 
   .kpi-card__value { font-size: 22px; }
