@@ -1,12 +1,13 @@
 /**
- * Timeline Component — ADR-002 + ADR-004 (v1.1.5)
+ * Timeline Component — ADR-002 + ADR-004
  *
  * Self-contained, layered CSS-Grid timeline. NO <table>.
  *
  * Responsibilities (TIMELINE_SPEC.md):
  *   - Render bars with correct positioning (ADR-004: minutes)
- *   - Group rows by RECURSO ASIGNADO (render-only, from window.ChangeOpsActions)
- *   - One single row per responsable: sticky label + bar lane
+ *   - ONE global view: a single flat lane list, no pool sections
+ *   - Group rows by (pool, RECURSO ASIGNADO) so homonymous resources in
+ *     different pools never share a lane
  *   - Detect and stack overlapping bars vertically
  *   - Detect Implementation vs Implementation conflicts (orange triangle)
  *   - Horizontal scroll with sticky responsable column
@@ -14,12 +15,15 @@
  *
  * Architecture: 5 layers (header, grid, bars, indicators, selection).
  *
- * Data source: Data Contract v1 (meta, kpis, timeline, table). The pool rows
- * and their display order come from `meta.poolOrder`, which Python emits from
- * the single source of truth (column_map.POOL_FAMILY_ORDER) — this layer never
- * hardcodes the pool list. The responsable grouping is derived at render time
- * from `window.ChangeOpsActions.passesInWindow[].resource` — the Contract is
- * frozen.
+ * Viewport: 4h anchored to the RUN CLOCK (meta.updatedAt), not to the
+ * hour-floored contract window, so a 04:30 run reads 04:30 → 08:30.
+ *
+ * Data source: Data Contract v1 (meta, kpis, timeline, table). Python emits
+ * `timeline` grouped by pool from the single source of truth
+ * (column_map.POOL_FAMILY_ORDER); the 4h slice and the flattening into lanes
+ * happen here, so the Contract stays frozen. The responsable comes from the bar
+ * itself or, for older contracts, from
+ * window.ChangeOpsActions.passesInWindow[].resource.
  */
 
 window.Timeline = (function () {
@@ -32,17 +36,78 @@ window.Timeline = (function () {
   var CELL_PX  = 96;   // pixels per grid cell (in sync with --timeline-grid-30min)
   var DEFAULT_LABEL_W = 220;
 
+  /* Global view window: 4h anchored to the RUN CLOCK (meta.updatedAt), not to
+     the hour-floored contract window. A run at 04:30 shows 04:30 → 08:30; the
+     contract stays 8h wide and this layer only looks at the first 4h from the
+     run minute. Bars keep absolute window minutes (ADR-004) and are shifted by
+     _viewOffsetMin when drawn. */
+  var VIEW_MINUTES = 240;   // 4 hours
+
   /* =========================================================
      POOL SCOPE — data-driven, never hardcoded (ADR-009)
      ---------------------------------------------------------
-     meta.poolOrder is the single source of truth for the display
-     order, published by Python (column_map.POOL_FAMILY_ORDER). This
-     layer resolves it ONCE in init() and both render loops read the
-     same resolved list, so the two loops can never disagree.
+     A bar carries its pool family from the contract, which Python
+     emits from column_map.POOL_FAMILY_ORDER. The pool is only used
+     for lane identity and the off-shift lookup here; there is no
+     pool section and no display order.
      ========================================================= */
   var UNKNOWN_POOL = 'Unknown';       // pool label when a bar carries none
   var UNKNOWN_POOL_KEY = 'unknown';   // CSS token for UNKNOWN_POOL
 
+  /* Short on-bar pool tag. Keyed by the CSS token from _poolKey; a pool outside
+     this table falls back to the first 3 letters of its name, so a new pool
+     still gets a tag without a code change. */
+  var CHIP_MIN_FULL_PX = 140;    // bar width for the full pool pill
+  var CHIP_MIN_DOT_PX = 56;      // below this the ticket owns the whole bar
+  var DERIVADO_TAG_MIN_PX = 250; // bar width for the secondary DERIVADO tag
+  var POOL_TAG = { 'yape': 'YAPE', 'sf': 'S&F', 'agileops-oro': 'ORO', 'agileops-prod': 'PROD' };
+  function _poolTag(pool) {
+    var key = _poolKey(pool);
+    if (POOL_TAG[key]) return POOL_TAG[key];
+    return String(pool || UNKNOWN_POOL).replace(/[^A-Za-z0-9&]/g, '').slice(0, 3).toUpperCase();
+  }
+
+  /* Chip inside the bar: status owns the bar fill, so the pool needs its own
+     marker. Full pill on wide bars, accent square on medium ones. A bar whose
+     pool is missing gets NO chip (never a guessed pool). */
+  function _hasPool(pool) {
+    return !!pool && pool !== UNKNOWN_POOL;
+  }
+
+  function _poolChipHtml(pool, width) {
+    if (!_hasPool(pool) || width < CHIP_MIN_DOT_PX) return '';
+    var full = width >= CHIP_MIN_FULL_PX;
+    return '<span class="timeline__pool-chip timeline__pool-chip--' + _poolKey(pool)
+      + (full ? '' : ' timeline__pool-chip--dot') + '" aria-hidden="true">'
+      + (full ? _esc(_poolTag(pool)) : '') + '</span>';
+  }
+
+  function _derivadoTagHtml(bar, width) {
+    return (bar.type === 'derivado' && width >= DERIVADO_TAG_MIN_PX)
+      ? '<span class="timeline__derivado-tag" aria-hidden="true">DERIVADO</span>'
+      : '';
+  }
+
+  /* Tooltip: ticket, app, pool and duration; a derivado also names its origin,
+     found as the non-derivado bar that carries the same ticket. */
+  function _barTitle(bar) {
+    var t = bar.ticket + ' — ' + bar.name;
+    if (_hasPool(bar.pool)) t += ' · Pool: ' + bar.pool;
+    t += ' (' + bar.duration + ' min)';
+    if (bar.type === 'derivado') {
+      t += ' · Derivado';
+      var origin = null;
+      for (var k = 0; k < _allBars.length; k++) {
+        var o = _allBars[k];
+        if (o.ticket === bar.ticket && o.type !== 'derivado') { origin = o; break; }
+      }
+      if (origin) {
+        t += ' · Origen: ' + (origin.responsable || '—')
+          + (_hasPool(origin.pool) ? ' (' + origin.pool + ')' : '');
+      }
+    }
+    return t;
+  }
   /* =========================================================
      STATE
      ========================================================= */
@@ -52,8 +117,12 @@ window.Timeline = (function () {
   var _allBars = [];          // flat array of all bar data
   var _onBarClick = null;     // callback(barData)
   var _responsableMap = {};   // ticket → RECURSO ASIGNADO (render-only)
-  var _rowMetrics = {};       // responsable → { top, height } within the rows area
-  var _poolOrder = [];        // display order, resolved once from meta.poolOrder
+  var _rowMetrics = {};       // lane key (pool + responsable) → { top, height }
+  var _viewOffsetMin = 0;     // minutes from the window start to the run clock
+  var _visibleBarCount = 0;   // bars drawn inside the 4h viewport by the last render
+  var _cellPx = CELL_PX;      // px per 30-min cell; stretched to fill the container (_fitScale)
+  var _resizeBound = false;   // window resize listener registered once
+  var _resizeTimer = null;
 
   /* =========================================================
      INIT — receives Data Contract v1
@@ -64,49 +133,90 @@ window.Timeline = (function () {
     _onBarClick = onBarClick || null;
 
     _responsableMap = _buildResponsableMap();
-    _poolOrder = _resolvePoolOrder(_contract);
+    _viewOffsetMin = _computeViewOffset();
+    _visibleBarCount = 0;
     _buildAllBars();
     render();
   }
 
   /* =========================================================
-     POOL ORDER — resolved once from meta.poolOrder (ADR-009)
+     VIEWPORT — 4h anchored to the run clock (global view)
      ---------------------------------------------------------
-     Never falls back to a hardcoded pool list: when meta.poolOrder
-     is missing, empty or malformed we fall back to the pools that
-     actually carry bars (alphabetical, so the order stays stable).
-     A pool declared with zero bars simply renders no rows.
+     The contract window starts on the hour (ADR-012) and updatedAt carries the
+     exact run minute, so offset = updatedAt - windowStart. Drawing everything
+     relative to that offset is what makes a 04:30 run read 04:30 → 08:30.
      ========================================================= */
-  function _resolvePoolOrder(contract) {
-    var declared = contract && contract.meta ? contract.meta.poolOrder : null;
-    if (!Array.isArray(declared)) return [];
+  function _computeViewOffset() {
+    var meta = (_contract && _contract.meta) || {};
 
-    var seen = {};
-    var order = [];
-    declared.forEach(function (pool) {
-      if (typeof pool !== 'string') return;
-      var name = pool.trim();
-      if (!name || seen[name]) return;
-      seen[name] = true;
-      order.push(name);
-    });
-    return order;
+    var wsParts = String(meta.windowStart || '').split(':');
+    if (wsParts.length !== 2) return 0;
+    var wsMin = parseInt(wsParts[0], 10) * 60 + parseInt(wsParts[1], 10);
+    if (isNaN(wsMin)) return 0;
+
+    var m = /(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(
+      String(meta.updatedAt || ''));
+    if (!m) return 0;
+    var upMin = parseInt(m[4], 10) * 60 + parseInt(m[5], 10);
+    if (isNaN(upMin)) return 0;
+
+    var off = upMin - wsMin;
+    if (off < 0) off += 1440;   // run just after midnight
+    return off < VIEW_MINUTES ? off : 0;
+  }
+
+  /** Minutes → pixels on the time axis. */
+  function _minutesToPx(min) {
+    return min * _cellPx / CELL_MIN;
   }
 
   /**
-   * The ONE pool display order every render loop iterates.
-   *
-   * meta.poolOrder leads; any pool that carries bars but is missing from it is
-   * appended in alphabetical order, so an unmapped pool can never be silently
-   * dropped and a missing meta.poolOrder degrades to "every pool that has
-   * bars" instead of rendering nothing. Still no hardcoded pool list.
+   * Stretch the 4h axis to the container width so no horizontal space is wasted.
+   * CELL_PX is the floor (narrow screens scroll); wider screens get wider cells.
+   * The value is mirrored into --timeline-grid-30min so CSS min-widths agree.
    */
-  function _orderedPoolNames(poolGroups) {
-    var order = _poolOrder.slice();
-    Object.keys(poolGroups || {}).sort().forEach(function (pool) {
-      if (order.indexOf(pool) === -1) order.push(pool);
+  function _fitScale() {
+    // -2: border/rounding safety so the axis never triggers a stray scrollbar.
+    var avail = _container ? _container.clientWidth - _labelWidth() - 2 : 0;
+    var cell = avail > 0 ? Math.floor((avail / (VIEW_MINUTES / CELL_MIN)) * 100) / 100 : CELL_PX;
+    _cellPx = Math.max(CELL_PX, cell);
+    if (_container && _container.style && _container.style.setProperty) _container.style.setProperty('--timeline-grid-30min', _cellPx + 'px');
+  }
+
+  function _bindResize() {
+    if (_resizeBound || typeof window.addEventListener !== 'function') return;
+    _resizeBound = true;
+    window.addEventListener('resize', function () {
+      clearTimeout(_resizeTimer);
+      _resizeTimer = setTimeout(function () { render(); }, 120);
     });
-    return order;
+  }
+
+  /** "04:30" for a clock minute-of-day. */
+  function _clockLabel(min) {
+    var t = ((min % 1440) + 1440) % 1440;
+    return _pad(Math.floor(t / 60)) + ':' + _pad(t % 60);
+  }
+
+  /**
+   * The 4h viewport as clock minutes, so every consumer (empty state, tests)
+   * reads ONE offset rule instead of re-deriving it.
+   */
+  function _viewWindow() {
+    var meta = (_contract && _contract.meta) || {};
+    var parts = String(meta.windowStart || '').split(':');
+    var wsMin = parts.length === 2
+      ? parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
+      : 0;
+    if (isNaN(wsMin)) wsMin = 0;
+
+    var startMin = (wsMin + _viewOffsetMin) % 1440;
+    return {
+      startMin: startMin,
+      endMin: (startMin + VIEW_MINUTES) % 1440,
+      offsetMin: _viewOffsetMin,
+      minutes: VIEW_MINUTES,
+    };
   }
 
   /* =========================================================
@@ -179,6 +289,8 @@ window.Timeline = (function () {
   function render() {
     if (!_container || !_contract) return;
 
+    _fitScale();
+    _bindResize();
     _renderHeader();
     _renderGrid();
     _renderBars();
@@ -192,14 +304,25 @@ window.Timeline = (function () {
     var el = document.getElementById('timeline-header');
     if (!el) return;
 
-    var startParts = _contract.meta.windowStart.split(':');
-    var startHour = parseInt(startParts[0], 10);
-    var totalHours = 8; // 480 min / 60
-
+    var off = _viewOffsetMin;
     var html = '<div class="timeline__header-gutter"></div>';
-    for (var h = 0; h < totalHours; h++) {
-      var hour = (startHour + h) % 24;
-      html += '<div class="timeline__hour">' + _pad(hour) + ':00</div>';
+
+    // Segments aligned to the clock hour: the first absorbs the run-minute
+    // offset (04:30 → 05:00), the rest are whole hours, the last may be
+    // partial. Every label sits on a real clock time.
+    var cursor = 0;
+    while (cursor < VIEW_MINUTES) {
+      var abs = off + cursor;
+      var toHour = (60 - (abs % 60)) % 60;
+      var seg = toHour === 0 ? 60 : toHour;
+      if (cursor + seg > VIEW_MINUTES) seg = VIEW_MINUTES - cursor;
+
+      // A segment too narrow for its label (run at 14:55 -> 5 min before 15:00)
+      // would print over the next hour label, so it stays blank.
+      var segPx = _minutesToPx(seg);
+      html += '<div class="timeline__hour" style="width:'
+        + segPx + 'px">' + (segPx < 44 ? '' : _offClock(abs)) + '</div>';
+      cursor += seg;
     }
     el.innerHTML = html;
   }
@@ -211,76 +334,98 @@ window.Timeline = (function () {
     var el = document.getElementById('timeline-grid');
     if (!el) return;
 
-    var totalCells = (480 / CELL_MIN);
-    var html = '<div class="timeline__grid-gutter"></div>';
-    for (var c = 0; c < totalCells; c++) {
-      html += '<div class="timeline__grid-col"></div>';
+    // 8 half-hour cells over the 4h viewport. The first cell is partial when
+    // the run minute is not a multiple of 30, so the remaining lines stay on
+    // clock half-hours instead of drifting with the run clock.
+    var first = CELL_MIN - (_viewOffsetMin % CELL_MIN);
+    var widths = [first];
+    var remaining = VIEW_MINUTES - first;
+    while (remaining > 0) {
+      var w = Math.min(CELL_MIN, remaining);
+      widths.push(w);
+      remaining -= w;
     }
+
+    var html = '<div class="timeline__grid-gutter"></div>';
+    widths.forEach(function (w) {
+      html += '<div class="timeline__grid-col" style="width:'
+        + _minutesToPx(w) + 'px"></div>';
+    });
     el.innerHTML = html;
   }
 
   /* =========================================================
-     LAYER 3: BARS — grouped by POOL, then by RECURSO ASIGNADO
+     LAYER 3: BARS — ONE flat global list (no pool sections)
+     ---------------------------------------------------------
+     Rows are grouped by (pool, responsable) but drawn as a single flat list
+     ordered by first start. The pool only keeps two pools' homonymous
+     resources in separate lanes and feeds the per-pool off-shift lookup.
      ========================================================= */
   function _renderBars() {
     var el = document.getElementById('timeline-bars');
     if (!el) return;
 
-    // Group bars by pool, then by responsable
-    var poolGroups = _groupByPool(_allBars);
+    var laneGroups = _groupLanes(_allBars);
 
     var rowHeight = _cssVar('--timeline-row-height', 32);
     var gap = _cssVar('--timeline-gap', 2);
-    // Both offsets are owned by CSS (timeline.css custom properties) so the
-    // geometry stays in sync if the header or pool header height changes.
-    var headerHeight = _cssVar('--timeline-pool-header-height', 28); // pool header height
-    var headerOffset = _cssVar('--timeline-header-height', 28);      // hour header / bars padding-top
+    var headerOffset = _cssVar('--timeline-header-height', 28); // hour header / bars padding-top
+    var off = _viewOffsetMin;
 
     _rowMetrics = {};
     var html = '';
     var cumulativeTop = headerOffset; // bars layer padding-top (hour header offset)
+    var visibleCount = 0;
 
-    _orderedPoolNames(poolGroups).forEach(function (poolName) {
-      var poolData = poolGroups[poolName];
-      if (!poolData || poolData.responsables.length === 0) return;
+    laneGroups.forEach(function (group) {
+      // Only the slice inside the 4h viewport is drawn: a pass already running
+      // is clipped to the left edge (the resource IS occupied), and one that
+      // starts after the viewport is dropped entirely.
+      var bars = _clipToView(group.bars, off);
+      if (bars.length === 0) return;
+      visibleCount += bars.length;
 
-      // Render pool header (in-flow: consumes headerHeight)
-      html += _renderPoolHeader(poolName, poolData);
-      cumulativeTop += headerHeight;
+      // Lane packing (interval partitioning): each lane holds only
+      // non-overlapping bars, so a cascade A-B-C with A not overlapping
+      // C reuses the same lane instead of growing the row.
+      var lanes = _groupOverlaps(bars);
+      var maxDepth = Math.max(1, lanes.length);
 
-      // Render responsables in this pool
-      poolData.responsables.forEach(function (group) {
-        var bars = group.bars;
+      var rowH = Math.max(
+        rowHeight,
+        maxDepth * (rowHeight - gap * 2) + gap * 2 + gap * (maxDepth - 1)
+      );
 
-        // Lane packing (interval partitioning): each lane holds only
-        // non-overlapping bars, so a cascade A-B-C with A not overlapping
-        // C reuses the same lane instead of growing the row.
-        var lanes = _groupOverlaps(bars);
-        var maxDepth = Math.max(1, lanes.length);
+      _rowMetrics[_laneKey(group.pool, group.responsable)] = {
+        top: cumulativeTop,
+        height: rowH,
+      };
 
-        var rowH = Math.max(
-          rowHeight,
-          maxDepth * (rowHeight - gap * 2) + gap * 2 + gap * (maxDepth - 1)
-        );
+      html += '<div class="timeline__row" style="height:' + rowH + 'px">'
+        + '<div class="timeline__row-label" title="' + _esc(group.responsable) + '">'
+        + '<span class="timeline__row-name">' + _esc(group.responsable) + '</span>'
+        + '<span class="timeline__row-count" title="' + bars.length + ' pase(s) en la ventana">' + bars.length + '</span>'
+        + '</div>'
+        + '<div class="timeline__row-lane">'
+        + _offShiftHtml(group.pool, group.responsable, off);
 
-        _rowMetrics[group.responsable] = { top: cumulativeTop, height: rowH };
+      var barHeight = (rowH - gap * 2 - gap * (maxDepth - 1)) / maxDepth;
 
-        html += '<div class="timeline__row" style="height:' + rowH + 'px">'
-          + '<div class="timeline__row-label" title="' + _esc(group.responsable) + '">'
-          + _esc(group.responsable) + '</div>'
-          + '<div class="timeline__row-lane">'
-          + _offShiftHtml(poolName, group.responsable);
+      lanes.forEach(function (lane, laneIdx) {
+        // Divider between stacked sub-lanes: makes 1 vs 2 simultaneous passes
+        // of the same resource unambiguous.
+        if (laneIdx > 0) {
+          html += '<div class="timeline__sublane-sep" style="top:'
+            + (gap + laneIdx * (barHeight + gap) - gap / 2 - 0.5) + 'px"></div>';
+        }
+        lane.forEach(function (item) {
+          var bar = item.bar;
 
-        var barHeight = (rowH - gap * 2 - gap * (maxDepth - 1)) / maxDepth;
-
-        lanes.forEach(function (lane, laneIdx) {
-          lane.forEach(function (item) {
-            var bar = item.bar;
-
-            // ADR-004: left and width in minutes → pixels (relative to the lane)
-            var left  = bar.start * CELL_PX / CELL_MIN;
-            var width = bar.duration * CELL_PX / CELL_MIN;
-            var top   = gap + laneIdx * (barHeight + gap);
+          // ADR-004 minutes from the window start, shifted into the viewport.
+          // 1px inset each side so back-to-back passes never fuse into one block.
+          var left  = _minutesToPx(bar._visStart) + 1;
+          var width = Math.max(2, _minutesToPx(bar._visEnd - bar._visStart) - 2);
+          var top   = gap + laneIdx * (barHeight + gap);
 
             var classes = [
               'timeline__bar',
@@ -308,18 +453,22 @@ window.Timeline = (function () {
               + ' data-ticket="' + _esc(bar.ticket) + '"'
               + ' data-idx="' + bar._idx + '"'
               + ' data-status="' + _esc(bar.status) + '"'
-              + ' title="' + _esc(bar.ticket) + ' — ' + _esc(bar.name) + ' (' + bar.duration + ' min)' + (bar.type === 'derivado' ? ' · Derivado' : '') + '"'
+              + (_hasPool(bar.pool) ? ' data-pool="' + _poolKey(bar.pool) + '"' : '')
+              + ' data-type="' + _esc(bar.type) + '"'
+              + ' title="' + _esc(_barTitle(bar)) + '"'
               + ' role="button" tabindex="0">'
-              + _esc(bar.ticket)
+              + _poolChipHtml(bar.pool, width)
+              + (width < 56 ? '' : _esc(bar.ticket))   // too narrow to read; the tooltip has it
+              + _derivadoTagHtml(bar, width)
               + '</div>';
           });
-        });
-
-        html += '</div></div>';   // lane + row
-        cumulativeTop += rowH;
       });
+
+      html += '</div></div>';   // lane + row
+      cumulativeTop += rowH;
     });
 
+    _visibleBarCount = visibleCount;
     el.innerHTML = html;
 
     el.querySelectorAll('.timeline__bar').forEach(function (barEl) {
@@ -337,12 +486,6 @@ window.Timeline = (function () {
     });
   }
 
-  /**
-   * Group bars by pool, then by responsable.
-   * Returns: { "Yape": { responsables: [], barCount: N }, ... }
-   * Keys are the pool names published in meta.poolOrder, in any order;
-   * _poolOrder drives the iteration.
-   */
   /* =========================================================
      T19: OFF-SHIFT LANE SHADING from window.ResourceShifts (backend payload).
      Unmatched lanes and missing payload render nothing (degraded path).
@@ -356,8 +499,8 @@ window.Timeline = (function () {
 
   function _offClock(min) {
     var parts = _contract.meta.windowStart.split(':');
-    var t = (parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + min) % 1440;
-    return _pad(Math.floor(t / 60)) + ':' + _pad(t % 60);
+    var t = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + min;
+    return _clockLabel(t);
   }
 
   function _offLabel(seg) {
@@ -367,14 +510,20 @@ window.Timeline = (function () {
     return 'Fuera de turno (entre ' + _offClock(seg[0]) + ' y ' + _offClock(seg[1]) + ')';
   }
 
-  function _offShiftHtml(pool, responsable) {
+  function _offShiftHtml(pool, responsable, off) {
     var lane = _laneShift(pool, responsable);
     if (!lane || !lane.matched || !Array.isArray(lane.fuera)) return '';
+    var viewEnd = off + VIEW_MINUTES;
     var out = '';
     lane.fuera.forEach(function (seg) {
-      var left = seg[0] * CELL_PX / CELL_MIN;
-      var width = (seg[1] - seg[0]) * CELL_PX / CELL_MIN;
-      if (width <= 0) return;
+      // Same 4h viewport as the bars: clip to the left edge and drop segments
+      // that only exist outside it.
+      var from = Math.max(seg[0], off);
+      var to = Math.min(seg[1], viewEnd);
+      if (to <= from) return;
+      var left = _minutesToPx(from - off);
+      var width = _minutesToPx(to - from);
+      // The tooltip keeps the real shift boundaries, not the clipped ones.
       var label = _offLabel(seg);
       out += '<div class="timeline__offshift"'
         + ' style="left:' + left + 'px;width:' + width + 'px"'
@@ -387,61 +536,60 @@ window.Timeline = (function () {
     return out;
   }
 
-  function _groupByPool(allBars) {
-    var byPool = {};
+  /** Stable lane identity: homonymous resources in different pools never merge. */
+  function _laneKey(pool, responsable) {
+    return String(pool || UNKNOWN_POOL) + '\u0000' + String(responsable || '');
+  }
+
+  /**
+   * ONE flat lane list for the global view: group by (pool, responsable),
+   * ordered by first start with responsable as the tie-breaker.
+   * A bar without a pool is grouped under UNKNOWN_POOL rather than being
+   * forced into a real pool — a silent wrong default would mislabel it.
+   */
+  function _groupLanes(allBars) {
+    var byLane = {};
     allBars.forEach(function (bar) {
-      // A bar without a pool is grouped under UNKNOWN_POOL rather than being
-      // forced into a real pool — a silent wrong default would mislabel it.
       var pool = bar.pool || UNKNOWN_POOL;
-      if (!byPool[pool]) byPool[pool] = { bars: [] };
-      byPool[pool].bars.push(bar);
+      var key = _laneKey(pool, bar.responsable);
+      if (!byLane[key]) {
+        byLane[key] = { pool: pool, responsable: bar.responsable, bars: [] };
+      }
+      byLane[key].bars.push(bar);
     });
 
-    // Now group by responsable within each pool
-    var result = {};
-    Object.keys(byPool).forEach(function (pool) {
-      var byResp = {};
-      byPool[pool].bars.forEach(function (bar) {
-        var resp = bar.responsable;
-        if (!byResp[resp]) byResp[resp] = [];
-        byResp[resp].push(bar);
-      });
-
-      var responsables = Object.keys(byResp).map(function (resp) {
-        return { responsable: resp, bars: byResp[resp] };
-      }).sort(function (a, b) {
-        return _firstStart(a.bars) - _firstStart(b.bars);
-      });
-
-      var barCount = byPool[pool].bars.length;
-      result[pool] = { responsables: responsables, barCount: barCount };
+    return Object.keys(byLane).map(function (key) {
+      return byLane[key];
+    }).sort(function (a, b) {
+      var delta = _firstStart(a.bars) - _firstStart(b.bars);
+      if (delta !== 0) return delta;
+      if (a.responsable === b.responsable) return 0;
+      return String(a.responsable) < String(b.responsable) ? -1 : 1;
     });
+  }
 
-    return result;
+  /**
+   * Clip a lane's bars to [off, off + VIEW_MINUTES] and store the visible
+   * range on each bar as _visStart / _visEnd (both relative to the viewport).
+   * Mutating in place is safe: the visible range is recomputed on every render
+   * and never feeds the contract.
+   */
+  function _clipToView(bars, off) {
+    var viewEnd = off + VIEW_MINUTES;
+    var out = [];
+    bars.forEach(function (bar) {
+      var from = Math.max(bar.start, off);
+      var to = Math.min(bar.start + bar.duration, viewEnd);
+      if (to <= from) return;
+      bar._visStart = from - off;
+      bar._visEnd = to - off;
+      out.push(bar);
+    });
+    return out;
   }
 
   function _firstStart(bars) {
     return Math.min.apply(null, bars.map(function (b) { return b.start; }));
-  }
-
-  /**
-   * Render a pool group header.
-   */
-  function _renderPoolHeader(poolName, poolData) {
-    var resourceCount = poolData.responsables.length;
-    var passCount = poolData.barCount;
-    var poolKey = _poolKey(poolName);
-
-    return '<div class="timeline__pool-header timeline__pool-header--' + poolKey + '">'
-      + '<div class="timeline__pool-label">'
-      // The dot colour comes from --pool-accent, set by the
-      // .timeline__pool-header--<token> rule in timeline.css. The token IS the
-      // single source shared with the bar fill, the badge and dashboard.js.
-      + '<span class="timeline__pool-dot"></span>'
-      + '<span class="timeline__pool-name">' + poolName + '</span>'
-      + '<span class="timeline__pool-counts">' + resourceCount + ' recurso' + (resourceCount !== 1 ? 's' : '') + ' · ' + passCount + ' pase' + (passCount !== 1 ? 's' : '') + '</span>'
-      + '</div>'
-      + '</div>';
   }
 
   /* =========================================================
@@ -453,34 +601,33 @@ window.Timeline = (function () {
 
     _allBars.forEach(function (b) { b._hasConflict = false; });
 
-    var poolGroups = _groupByPool(_allBars);
+    var off = _viewOffsetMin;
     var html = '';
 
-    // Same resolved order as _renderBars — one list, two consumers.
-    _orderedPoolNames(poolGroups).forEach(function (poolName) {
-      var poolData = poolGroups[poolName];
-      if (!poolData || poolData.responsables.length === 0) return;
+    // Same lane list as _renderBars — one list, two consumers.
+    _groupLanes(_allBars).forEach(function (group) {
+      var bars = _clipToView(group.bars, off);
+      if (bars.length === 0) return;
 
-      poolData.responsables.forEach(function (group) {
-        var conflicts = _detectConflicts(group.bars);
-        if (!conflicts.length) return;
+      var conflicts = _detectConflicts(bars);
+      if (!conflicts.length) return;
 
-        var metrics = _rowMetrics[group.responsable] || { top: 0, height: 44 };
-        var top = metrics.top + (metrics.height / 2) - 5;
+      var metrics = _rowMetrics[_laneKey(group.pool, group.responsable)]
+        || { top: 0, height: 44 };
+      var top = metrics.top + (metrics.height / 2) - 5;
 
-        conflicts.forEach(function (conflict) {
-          // Mark by object reference: duplicate tickets share the ticket
-          // string, so a ticket-keyed lookup would flag the wrong bar.
-          conflict.bars.forEach(function (bar) { bar._hasConflict = true; });
+      conflicts.forEach(function (conflict) {
+        // Mark by object reference: duplicate tickets share the ticket
+        // string, so a ticket-keyed lookup would flag the wrong bar.
+        conflict.bars.forEach(function (bar) { bar._hasConflict = true; });
 
-          var midMin = (conflict.start + conflict.end) / 2;
-          var left = _labelWidth() + midMin * CELL_PX / CELL_MIN;
+        var midMin = (conflict.start + conflict.end) / 2;
+        var left = _labelWidth() + _minutesToPx(midMin);
 
-          html += '<div class="timeline__conflict"'
-            + ' style="left:' + (left - 8) + 'px;top:' + top + 'px"'
-            + ' title="Conflicto: Implementación vs Implementación"'
-            + '></div>';
-        });
+        html += '<div class="timeline__conflict"'
+          + ' style="left:' + (left - 8) + 'px;top:' + top + 'px"'
+          + ' title="Conflicto: Implementación vs Implementación"'
+          + '></div>';
       });
     });
 
@@ -513,7 +660,9 @@ window.Timeline = (function () {
   }
 
   function _barsOverlap(a, b) {
-    return a.start < (b.start + b.duration) && b.start < (a.start + a.duration);
+    // Visible-range geometry: an overlap is only real where both bars are
+    // actually drawn inside the 4h viewport.
+    return a._visStart < b._visEnd && b._visStart < a._visEnd;
   }
 
   function _detectConflicts(bars) {
@@ -525,11 +674,8 @@ window.Timeline = (function () {
           conflicts.push({
             bars: [implBars[i], implBars[j]],
             barTickets: [implBars[i].ticket, implBars[j].ticket],
-            start: Math.max(implBars[i].start, implBars[j].start),
-            end: Math.min(
-              implBars[i].start + implBars[i].duration,
-              implBars[j].start + implBars[j].duration
-            ),
+            start: Math.max(implBars[i]._visStart, implBars[j]._visStart),
+            end: Math.min(implBars[i]._visEnd, implBars[j]._visEnd),
           });
         }
       }
@@ -640,10 +786,19 @@ window.Timeline = (function () {
 
   function scrollToHour(hour) {
     if (!_container || !_contract) return;
-    var startParts = _contract.meta.windowStart.split(':');
-    var startHour = parseInt(startParts[0], 10);
-    var minFromStart = ((hour - startHour + 24) % 24) * 60;
-    _container.scrollLeft = Math.max(0, minFromStart * CELL_PX / CELL_MIN);
+    var wsParts = _contract.meta.windowStart.split(':');
+    var wsMin = parseInt(wsParts[0], 10) * 60 + parseInt(wsParts[1], 10);
+    var delta = (parseInt(hour, 10) * 60) - wsMin;
+    if (delta < 0) delta += 1440;
+
+    // Only hours inside the 4h viewport are addressable; anything outside
+    // scrolls back to the start instead of pointing past the grid.
+    var visMin = delta - _viewOffsetMin;
+    if (visMin < 0 || visMin > VIEW_MINUTES) {
+      _container.scrollLeft = 0;
+      return;
+    }
+    _container.scrollLeft = Math.max(0, _minutesToPx(visMin));
   }
 
   /* =========================================================
@@ -659,5 +814,13 @@ window.Timeline = (function () {
     // Public so dashboard.js shares ONE pool→token rule (ADR-009) instead of
     // re-deriving a class name with different logic.
     poolKey: _poolKey,
+    // Public so the empty state and any consumer print the SAME 4h viewport the
+    // grid draws, instead of re-deriving the run-clock offset.
+    viewWindow: _viewWindow,
+    clockLabel: _clockLabel,
+    // Bars the last render actually drew. The contract window is 8h wide and
+    // the component only draws 4h, so the contract bar count would overstate
+    // what is on screen.
+    visibleBarCount: function () { return _visibleBarCount; },
   };
 })();

@@ -16,13 +16,15 @@
     <header class="topbar">
       <h1>Pases AgileOps</h1>
       <div class="topbar-meta">
-        <!-- ============ POOL VISIBILITY SELECTOR (ADR-011) ============
+        <!-- ============ GLOBAL POOL FILTER (ADR-011) ============
              Options are populated from meta.visibilityGroups by dashboard.js,
-             so the web layer hardcodes no group list. A real <label for> +
-             native <select> keeps it keyboard and screen-reader accessible
-             with no ARIA juggling. -->
+             so the web layer hardcodes no group list. The leading "Todos"
+             option (value "") means no filter, and it is the default: the
+             timeline opens as ONE global view. A real <label for> + native
+             <select> keeps it keyboard and screen-reader accessible with no
+             ARIA juggling. -->
         <div class="pool-group" id="pool-group">
-          <label class="pool-group__label" for="pool-group-select">Pool</label>
+          <label class="pool-group__label" for="pool-group-select">Filtro</label>
           <select class="pool-group__select" id="pool-group-select"></select>
           <span class="pool-group__badge" id="pool-group-badge"></span>
           <span class="pool-group__counts" id="pool-group-counts"
@@ -81,6 +83,13 @@
     <section class="timeline-legend" id="timeline-legend" aria-label="Leyenda del Timeline">
       <span class="timeline-legend__title">Leyenda del Timeline:</span>
       <span class="timeline-legend__item">
+        <strong>Pool</strong>
+        <span class="timeline__pool-chip timeline__pool-chip--yape">YAPE</span>
+        <span class="timeline__pool-chip timeline__pool-chip--sf">S&amp;F</span>
+        <span class="timeline__pool-chip timeline__pool-chip--agileops-oro">ORO</span>
+        <span class="timeline__pool-chip timeline__pool-chip--agileops-prod">PROD</span>
+      </span>
+      <span class="timeline-legend__item">
         <span class="timeline-legend__swatch timeline-legend__swatch--off" aria-hidden="true"></span>
         <span><strong>Fuera de turno</strong> — Recurso no disponible</span>
       </span>
@@ -97,8 +106,12 @@
         <span><strong>Inicio atrasado</strong></span>
       </span>
       <span class="timeline-legend__item">
+        <span class="timeline-legend__swatch timeline-legend__swatch--coordinado" aria-hidden="true"></span>
+        <span><strong>Coordinado</strong></span>
+      </span>
+      <span class="timeline-legend__item">
         <span class="timeline-legend__swatch timeline-legend__swatch--derivado" aria-hidden="true"></span>
-        <span><strong>Derivado</strong> — Borde punteado</span>
+        <span><strong>Derivado</strong> — Borde discontinuo = pase derivado</span>
       </span>
       <span class="timeline-legend__item">
         <span class="timeline-legend__conflict" aria-hidden="true">⚠</span>
@@ -127,7 +140,7 @@
           Sin pases en la ventana actual para <span id="timeline-empty-group">—</span>
         </p>
         <p class="timeline-empty__text">
-          Pooles incluidos: <span id="timeline-empty-families"></span>.
+          Pools incluidos: <span id="timeline-empty-families"></span>.
           No hay pases programados entre las
           <span id="timeline-empty-window"></span>.
         </p>

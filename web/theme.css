@@ -20,11 +20,10 @@
      themes on purpose: the bar label is rgba(0,0,0,.7), so a light fill keeps
      the label above 14:1 regardless of the theme.
 
-     --pool-accent-* are the pool-header accents (3px border + 8px dot), which
-     sit on --bg-surface. A dark accent is invisible on the dark surface, so the
-     dark theme re-declares them lighter below. Both sets are overridden by the
-     .timeline__pool-header--<token> rules in components/timeline/timeline.css,
-     which is where a pool's token is bound to its colours. */
+     --pool-accent-* are the KPI pool-group badge accents
+     (.pool-group__badge--<token> in this file), which sit on --bg-surface. A
+     dark accent is invisible on the dark surface, so the dark theme re-declares
+     them lighter below. */
   --color-yape: #F6E7A7;
   --color-sf: #E6D7FF;
   --color-agileops-oro: #BFDBFE;
@@ -52,6 +51,34 @@
   /* A1: text on the amber (--color-warning) fill of the "Inicio atrasado"
      badge and bar. Dark text, ~6.8:1; white was ~2.1:1. */
   --text-on-warning: #1F2937;
+
+  /* Timeline bar palette: the bar colour is the OPERATIONAL STATUS only.
+     Pool identity is a separate chip (accent below), never the bar fill. */
+  --tl-en-curso-bg: #A7F3D0;
+  --tl-en-curso-border: #10B981;
+  --tl-en-curso-text: #064E3B;
+  --tl-atrasado-bg: #FBBF24;
+  --tl-atrasado-border: #F59E0B;
+  --tl-atrasado-text: #78350F;
+  --tl-coordinado-bg: #BFDBFE;
+  --tl-coordinado-border: #60A5FA;
+  --tl-coordinado-text: #1E3A5F;
+
+  /* Derivado frame: slate-blue, thin and dashed. Replaces the status border (same
+     1px width, so no geometry change) and never competes with the fill. The bar
+     fills are identical in both themes, so one value serves both. */
+  --tl-derivado-border: #5B6B82;
+  --tl-derivado-tag-border: rgba(51, 65, 85, 0.5);
+
+  /* Pool chip: dark pill + per-pool accent stripe (keys = Timeline.poolKey tokens) */
+  --tl-chip-bg: #1E293B;
+  --tl-chip-outline: rgba(148, 163, 184, 0.45);   /* keeps the pill visible on dark surfaces */
+  --tl-chip-text: #FFFFFF;
+  --tl-chip-accent-default: #94A3B8;
+  --tl-chip-accent-yape: #8B5CF6;
+  --tl-chip-accent-sf: #0F766E;
+  --tl-chip-accent-agileops-oro: #CA8A04;
+  --tl-chip-accent-agileops-prod: #64748B;
 
   /* Layout */
   --content-max-width: 1600px;
@@ -484,15 +511,18 @@ body {
 .timeline-legend__swatch--prod { background: var(--color-agileops-prod); }
 
 .timeline-legend__swatch--en-curso {
-  background-color: #ECFDF3;
-  background-image: linear-gradient(to right, #16A34A 0 4px, transparent 4px);
-  outline: 1px solid #86D7A3;
-  outline-offset: -1px;
+  background: var(--tl-en-curso-bg);
+  border: 1px solid var(--tl-en-curso-border);
 }
 
 .timeline-legend__swatch--atrasado {
-  background: var(--color-warning);
-  border: 2px solid var(--color-conflict);
+  background: var(--tl-atrasado-bg);
+  border: 1px solid var(--tl-atrasado-border);
+}
+
+.timeline-legend__swatch--coordinado {
+  background: var(--tl-coordinado-bg);
+  border: 1px solid var(--tl-coordinado-border);
 }
 
 .timeline-legend__swatch--derivado {
