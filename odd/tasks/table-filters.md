@@ -25,6 +25,7 @@ Los comportamientos S1-S6 están reconstruidos desde el código implementado: el
 | T3 | A2 | inline | done | `6e7c6dd` (docs); PR apilado abierto tras `7598386` |
 | T4 | S2 | inline | done | `576d600` (fix de layout) + `dace8bd` (selects desde la fuente) |
 | T5 | S2 | inline | done | `1cee209` (un bound por columna: Desde/Hasta) |
+| T6 | S5 | inline | done | `b3c28c6` (enmienda L11: filtro de pools sin chip SIN POOL) |
 
 ## Log
 
