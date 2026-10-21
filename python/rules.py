@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 # Time thresholds (in minutes)
 LATE_START_THRESHOLD = 5          # > 5 min past planned start while still Coordinado
-RATIFICATION_SOON_THRESHOLD = 10  # ≤ 10 min before ratification start = soon
+RATIFICATION_SOON_THRESHOLD = 10  # ≤ 10 min before ratification END = about to expire
 
 # ADR-006 (enmienda 2026-10-21): terminal-state keywords (normalized:
 # lowercase, no accents)
@@ -137,7 +137,10 @@ def _apply_ratification_rules(
     """
     Rules:
     - Ratificación por vencer: reference_now within RATIFICATION_SOON_THRESHOLD
-      minutes BEFORE the ratification start.
+      minutes BEFORE the ratification END (FIN_RATI) — the window is about to
+      close. Enmienda 2026-10-21 (ADR-007): the old rule anchored on the START
+      (inicio_rati), which flagged windows about to OPEN; "por vencer" must
+      pair with "vencida" (now > FIN_RATI) on the same FIN_RATI axis.
     - Ratificación vencida: reference_now past the ratification end.
 
     Terminal rows are skipped entirely (ADR-006).
@@ -155,13 +158,13 @@ def _apply_ratification_rules(
         if not isinstance(inicio_rati, datetime) or not isinstance(fin_rati, datetime):
             continue
 
-        minutes_to_start = (inicio_rati - reference_now).total_seconds() / 60
-        if 0 <= minutes_to_start <= RATIFICATION_SOON_THRESHOLD:
+        minutes_to_end = (fin_rati - reference_now).total_seconds() / 60
+        if 0 <= minutes_to_end <= RATIFICATION_SOON_THRESHOLD:
             row["_ratification_soon"] = True
             logger.debug(
-                "Ratification soon: %s (%.0f min to start)",
+                "Ratification soon: %s (%.0f min to ratification end)",
                 row.get("ticket"),
-                minutes_to_start,
+                minutes_to_end,
             )
 
         if reference_now > fin_rati:

@@ -70,7 +70,7 @@ Esta información no surge del análisis de código; la indicó el usuario despu
 
 **Reglas de negocio (`rules.py`)**
 - Inicio atrasado: estado "Coordinado" y reloj > inicio + 5 min (`rules.py:27,114`).
-- Ratificación por vencer: faltan de 0 a 10 min para el inicio de la ratificación (`rules.py:28,151`).
+- Ratificación por vencer: faltan de 0 a 10 min para el **cierre** de la ratificación (FIN_RATI; enmienda 2026-10-21 — antes decía "inicio", anclado al inicio de la ventana).
 - Ratificación vencida: reloj > `fin_rati` (`rules.py:159`).
 - Conflicto: mismo responsable, ambas Implementación (no Derivado) y solape de intervalos (`rules.py:166-205`).
 - Estados terminales (cerrado, terminado, rechazado, cancelado, anulado, registrado) quedan fuera de KPIs y conflictos (`rules.py:33-40`).

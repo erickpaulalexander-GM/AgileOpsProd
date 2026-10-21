@@ -207,7 +207,11 @@ Congela el alcance de los KPIs de ratificación y reversión para v1.0.
   mapeada, no se parsea y no participa de ninguna regla. Se eliminó toda
   lógica pendiente asociada.
 - KPIs derivados:
-  - *Ratificación por vencer*: `0 ≤ (FIN_RATI_INI − updatedAt) ≤ 10 min`.
+  - *Ratificación por vencer*: `0 ≤ (FIN_RATI − updatedAt) ≤ 10 min`.
+    Enmienda 2026-10-21: la fórmula anterior decía `FIN_RATI_INI` y el
+    código anclaba el **inicio** de la ventana — "por vencer" señalaba la
+    apertura (y el par con "vencida" quedaba incoherente). Ahora ancla en
+    `FIN_RATI`, el mismo eje de "vencida".
   - *Ratificación vencida*: `updatedAt > FIN_RATI`.
 
 ### Reversiones

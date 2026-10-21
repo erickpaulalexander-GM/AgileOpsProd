@@ -196,7 +196,7 @@ tickets.
 | Field | Type | Description |
 |-------|------|-------------|
 | `lateStarts` | number | Late starts (`rules.LATE_START_THRESHOLD`, terminal states excluded) |
-| `ratificationsSoon` | number | Ratifications about to start (within `rules.RATIFICATION_SOON_THRESHOLD`) |
+| `ratificationsSoon` | number | Ratifications about to expire — window closing within `rules.RATIFICATION_SOON_THRESHOLD` |
 | `ratificationsExpired` | number | Ratifications already past `FIN_RATI` |
 | `reversions` | number | Always `0`. Placeholder KPI, future source JIRA (ADR-007). Reads no Excel column. |
 
