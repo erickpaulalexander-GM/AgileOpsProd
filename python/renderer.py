@@ -277,6 +277,7 @@ def _generate_html(
 
     # Read JS files
     timeline_js = (WEB_DIR / "components" / "timeline" / "timeline.js").read_text(encoding="utf-8")
+    table_js = (WEB_DIR / "components" / "table" / "table.js").read_text(encoding="utf-8")
     dashboard_js = (WEB_DIR / "dashboard.js").read_text(encoding="utf-8")
 
     # Embed data contract in the shape the FROZEN frontend consumes.
@@ -330,6 +331,10 @@ def _generate_html(
     html = html.replace(
         '<script src="components/timeline/timeline.js"></script>',
         f'<script>\n{timeline_js}\n</script>',
+    )
+    html = html.replace(
+        '<script src="components/table/table.js"></script>',
+        f'<script>\n{table_js}\n</script>',
     )
     html = html.replace(
         '<script src="dashboard.js"></script>',

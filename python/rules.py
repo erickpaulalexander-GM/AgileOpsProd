@@ -9,9 +9,10 @@ ADR-012 (supersedes ADR-005's anchor): the temporal reference is
          the explicit --now override). The Excel mtime is diagnostic only and
          never reaches these rules.
 ADR-006: TERMINAL states (Cerrado, Terminado Satisfactorio, Rechazado,
-         Cancelado, Anulado, Registrado and equivalents) are EXCLUDED from the
-         operational KPIs and from conflict detection. They never produce
-         late starts, ratification alerts, or conflicts.
+         Cancelado, Anulado, Registrado, the approval family Aprobado *
+         and equivalents) are EXCLUDED from the operational KPIs and from
+         conflict detection. They never produce late starts, ratification
+         alerts, or conflicts.
 """
 
 from __future__ import annotations
@@ -25,11 +26,17 @@ logger = logging.getLogger(__name__)
 
 # Time thresholds (in minutes)
 LATE_START_THRESHOLD = 5          # > 5 min past planned start while still Coordinado
-RATIFICATION_SOON_THRESHOLD = 10  # ≤ 10 min before ratification start = soon
+RATIFICATION_SOON_THRESHOLD = 10  # ≤ 10 min before ratification END = about to expire
 
-# ADR-006: terminal-state keywords (normalized: lowercase, no accents)
+# ADR-006 (enmienda 2026-10-21): terminal-state keywords (normalized:
+# lowercase, no accents)
 # NOTE: "registrado" also matches "Pre Registrado" by substring — intended,
 # both are pre-execution states excluded from operational KPIs.
+# NOTE: "aprobado" covers the whole approval family (Aprobado LT/CL QA/
+# CL DEV/PO/Ops) and "Preaprobado" — approval states are inactive work and
+# must not raise ratification alerts or conflicts (user report: "Aprobado LT"
+# leaking into the Ratificaciones vencidas KPI, tickets OCD-237620,
+# MVPLEGBCP-252621).
 TERMINAL_STATE_KEYWORDS = (
     "cerrado",
     "terminado",
@@ -37,6 +44,7 @@ TERMINAL_STATE_KEYWORDS = (
     "cancelado",
     "anulado",
     "registrado",
+    "aprobado",
 )
 
 
@@ -129,7 +137,10 @@ def _apply_ratification_rules(
     """
     Rules:
     - Ratificación por vencer: reference_now within RATIFICATION_SOON_THRESHOLD
-      minutes BEFORE the ratification start.
+      minutes BEFORE the ratification END (FIN_RATI) — the window is about to
+      close. Enmienda 2026-10-21 (ADR-007): the old rule anchored on the START
+      (inicio_rati), which flagged windows about to OPEN; "por vencer" must
+      pair with "vencida" (now > FIN_RATI) on the same FIN_RATI axis.
     - Ratificación vencida: reference_now past the ratification end.
 
     Terminal rows are skipped entirely (ADR-006).
@@ -147,13 +158,13 @@ def _apply_ratification_rules(
         if not isinstance(inicio_rati, datetime) or not isinstance(fin_rati, datetime):
             continue
 
-        minutes_to_start = (inicio_rati - reference_now).total_seconds() / 60
-        if 0 <= minutes_to_start <= RATIFICATION_SOON_THRESHOLD:
+        minutes_to_end = (fin_rati - reference_now).total_seconds() / 60
+        if 0 <= minutes_to_end <= RATIFICATION_SOON_THRESHOLD:
             row["_ratification_soon"] = True
             logger.debug(
-                "Ratification soon: %s (%.0f min to start)",
+                "Ratification soon: %s (%.0f min to ratification end)",
                 row.get("ticket"),
-                minutes_to_start,
+                minutes_to_end,
             )
 
         if reference_now > fin_rati:

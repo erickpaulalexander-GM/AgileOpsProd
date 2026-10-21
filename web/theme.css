@@ -796,6 +796,26 @@ body {
 }
 
 /* ----------------------------------------------  responsive  */
+/* Tablet / intermediate widths (H2 of the 2026-10-21 mobile audit): the
+   topbar meta carries FIXED footprints (counts 46ch + select 18ch +
+   badge 17ch ≈ 590px) that cannot live in a single 52px row between
+   769-1100px. Let the row wrap and the height grow BEFORE the phone
+   breakpoint. */
+@media (max-width: 1100px) {
+  .topbar {
+    height: auto;
+    min-height: var(--header-height);
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .topbar-meta {
+    flex-wrap: wrap;
+  }
+}
+
 @media (max-width: 768px) {
   :root {
     --content-padding: 10px;
@@ -806,12 +826,144 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  /* flex-wrap: nowrap overrides the 1100px block: in column direction a
+     wrap would create horizontal columns (items side by side). */
   .topbar {
     flex-direction: column;
+    flex-wrap: nowrap;
     height: auto;
     padding: 10px var(--content-padding);
     gap: 6px;
   }
 
+  /* H1: the counts footprint (46ch ≈ 300px, nowrap) must never widen a
+     ~360px phone into a page-level horizontal scroll. Wrap the meta row
+     and let the counts text break onto its own lines. */
+  .topbar-meta {
+    flex-wrap: wrap;
+  }
+  .pool-group__counts {
+    min-width: 0;
+    white-space: normal;
+  }
+
   .kpi-card__value { font-size: 22px; }
 }
+
+/* ----------------------------------------------  table toolbar + filters  */
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.table-toolbar .tb-mode { font-weight: 700; color: var(--text-primary); }
+.table-toolbar .tb-spacer { flex: 1; }
+
+.tb-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-surface-alt);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tb-btn:hover { background: var(--bg-hover); }
+.tb-btn--ghost { background: transparent; color: var(--text-secondary); }
+.tb-btn:focus-visible,
+.tf-chip:focus-visible,
+.th-sort:focus-visible,
+.tf-reset:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+
+/* sortable titles */
+.th-sort {
+  all: unset;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.th-sort:hover { color: var(--text-primary); }
+.th-arrow { color: var(--text-primary); }
+
+/* compact second header row: filters */
+.tf-row td {
+  padding: 4px 14px 6px;
+  background: var(--bg-surface-alt);
+  border-bottom: 2px solid var(--border-strong);
+  vertical-align: top;
+}
+.tf-cell { display: flex; align-items: flex-start; gap: 4px; min-width: 0; }
+.tf-chips, .tf-dates { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.tf-dates { flex-direction: column; }
+
+.tf-input {
+  width: 100%;
+  min-width: 90px;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+}
+.tf-input--date { min-width: 0; width: 100%; color-scheme: light dark; }
+/* Date filter: label above the control so the ~130px date select fits the
+   ~135px column instead of overflowing it (label inline was 166px wide). */
+.tf-date { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tf-date > span {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-muted);
+}
+
+.tf-chip {
+  padding: 1px 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tf-chip[aria-pressed="true"] {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+  color: var(--bg-surface);
+}
+.tf-chip--pool { padding: 0; border: 0; background: transparent; border-radius: 3px; opacity: 0.55; }
+.tf-chip--pool[aria-pressed="true"] { background: transparent; opacity: 1; outline: 2px solid var(--text-primary); outline-offset: 1px; }
+.tf-chip--pool .timeline__pool-chip { margin: 0; display: inline-block; }
+
+.tf-reset {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 12px;          /* align with the input, below the stacked label */
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tf-reset:hover { color: var(--text-primary); }
+/* Reserve the reset slot so showing/hiding it never reflows the filter row;
+   only the toolbar's global clear stays layout-hidden. */
+.tf-reset[hidden] { visibility: hidden; }
+.table-toolbar [hidden] { display: none; }
+
+/* pool chip inside a table cell: same pill as the Timeline */
+.table-section td .timeline__pool-chip { margin-right: 0; display: inline-block; }
+.table-empty .tb-btn { margin-left: 6px; }

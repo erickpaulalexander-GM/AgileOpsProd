@@ -590,54 +590,20 @@
      TABLE RENDER — Data Contract v1 format
      ========================================================= */
   function renderTable(rows, group) {
-    var thead = document.getElementById('table-head');
-    var tbody = document.getElementById('table-body');
-    if (!thead || !tbody) return;
-
-    thead.innerHTML = '<tr>'
-      + '<th>RECURSO ASIGNADO</th>'
-      + '<th>Pool</th>'
-      + '<th>Tipo</th>'
-      + '<th>Ticket</th>'
-      + '<th>NOMBRE APP</th>'
-      + '<th>Estado Actual</th>'
-      + '<th>Inicio Impl</th>'
-      + '<th>Fin Impl</th>'
-      + '</tr>';
-
-    // Zero-result state for a group with no live operational rows. Plain text,
-    // no styling that reads as an error (ADR-011).
-    if (rows.length === 0) {
-      tbody.innerHTML = '<tr class="table-empty"><td colspan="8">'
-        + (group
-            ? 'Sin pases activos para el pool ' + _esc(group.label) + '.'
-            : 'Sin pases activos.')
-        + '</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = rows.map(function (r) {
-      var poolClass = 'badge--' + _poolKey(r.pool);
-      var statusClass = r.status === 'Coordinado' ? 'badge--coordinado'
-        : r.status === 'Pase en curso' ? 'badge--pase-en-curso'
-        : r.status === 'Inicio atrasado' ? 'badge--inicio-atrasado'
-        : 'badge--neutral';
-      return '<tr data-ticket="' + _esc(r.ticket) + '">'
-        + '<td>' + (_esc(r.responsable) || '\u2014') + '</td>'
-        + '<td><span class="badge ' + poolClass + '">' + _esc(r.pool) + '</span></td>'
-        + '<td>' + _esc(r.type) + '</td>'
-        + '<td><a class="row-link" href="' + _jiraUrl(r.ticket) + '"'
-        +   ' target="_blank" rel="noopener noreferrer"'
-        +   ' title="Abrir ' + _esc(r.ticket) + ' en JIRA">'
-        +   _esc(r.ticket) + '<span class="action-card__ext" aria-hidden="true">\u2197</span></a></td>'
-        + '<td>' + _esc(r.nombre_app) + '</td>'
-        + '<td><span class="badge ' + statusClass + '">' + _esc(r.status) + '</span></td>'
-        + '<td>' + _esc(r.inicio_impl) + '</td>'
-        + '<td>' + _esc(r.fin_impl) + '</td>'
-        + '</tr>';
-    }).join('');
+    // Rendering, filtering, sorting and the next-hour window live in OpsTable
+    // (components/table/table.js); this only hands it the active group's rows.
+    // Filters, sort and mode survive a group change.
+    if (window.OpsTable) window.OpsTable.setRows(rows, DATA.meta, group);
   }
 
+  /** Legend pool chips from the SAME catalog the bars and the table use. */
+  function _renderLegendPools() {
+    var el = document.getElementById('timeline-legend-pools');
+    if (!el || !window.Timeline || !window.Timeline.poolCatalog) return;
+    el.innerHTML = window.Timeline.poolCatalog().map(function (c) {
+      return window.Timeline.poolChipHtml(c.label);
+    }).join('');
+  }
   /* =========================================================
      DRAWER — bar detail (v1.1.4: full fields + JIRA ticket)
      ========================================================= */
@@ -1076,6 +1042,18 @@
     _groups = _resolveGroups();
     _activeGroup = _initialGroup();
     _initGroupSelector();
+
+    var tableHead = document.getElementById('table-head');
+    var tableBody = document.getElementById('table-body');
+    if (window.OpsTable && tableHead && tableBody) {
+      window.OpsTable.init({
+        head: tableHead,
+        body: tableBody,
+        toolbar: document.getElementById('table-toolbar'),
+        jiraUrl: _jiraUrl,
+      });
+    }
+    _renderLegendPools();
 
     // KPIs + timeline + table, all through the one group render pass.
     _applyGroup(_activeGroup, { persist: false });

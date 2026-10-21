@@ -158,10 +158,26 @@ Coincidencia por palabra clave normalizada (sin acentos, minúsculas):
 | `rechazado` | Rechazado, Rechazada |
 | `cancelado` | Cancelado, Cancelada |
 | `anulado` | Anulado, Anulada |
+| `registrado` | Registrado, Pre Registrado (subcadena, intencional) |
+| `aprobado` | Aprobado LT/CL QA/CL DEV/PO/Ops, Preaprobado (enmienda 2026-10-21) |
 
-Los estados operativos (Coordinado, Registrado, Pase en curso, Aprobado LT,
-Aprobado CL QA, Aprobado CL DEV, Ratificación Parcial Satisfactorio) **sí**
-cuentan.
+Los únicos estados que cuentan para KPIs y conflictos son los activos:
+**Coordinado**, **Pase en curso**, **Ratificación total en curso** y
+**Ratificación Parcial Satisfactorio**.
+
+### Enmienda 2026-10-21 — familia Aprobado* y Preaprobado
+
+Reporte del usuario: tickets en estado "Aprobado LT" aparecían en el KPI
+Ratificaciones vencidas (OCD-237620, MVPLEGBCP-252621 en el artefacto del
+2026-10-20). Causa: dos catálogos desalineados — la tabla operativa excluye
+"Aprobado LT/CL QA/CL DEV/PO" (`EXCLUDED_TABLE_STATES`, adapter.py), pero
+`TERMINAL_STATE_KEYWORDS` no contenía ninguna keyword que la matcheara.
+Enmienda: se agregó la keyword `aprobado`, que por subcadena cubre toda la
+familia `Aprobado *` y `Preaprobado`. Efecto: la familia desaparece de
+vencidas, por-vencer, late starts (ya gated por Coordinado), conflictos y
+todo scope derivado de `filter_operational()`. Este doc también corregía
+de paso el desglose previo: la keyword `registrado` existía en el código
+pero faltaba en la tabla.
 
 ### Alcance
 
@@ -191,7 +207,11 @@ Congela el alcance de los KPIs de ratificación y reversión para v1.0.
   mapeada, no se parsea y no participa de ninguna regla. Se eliminó toda
   lógica pendiente asociada.
 - KPIs derivados:
-  - *Ratificación por vencer*: `0 ≤ (FIN_RATI_INI − updatedAt) ≤ 10 min`.
+  - *Ratificación por vencer*: `0 ≤ (FIN_RATI − updatedAt) ≤ 10 min`.
+    Enmienda 2026-10-21: la fórmula anterior decía `FIN_RATI_INI` y el
+    código anclaba el **inicio** de la ventana — "por vencer" señalaba la
+    apertura (y el par con "vencida" quedaba incoherente). Ahora ancla en
+    `FIN_RATI`, el mismo eje de "vencida".
   - *Ratificación vencida*: `updatedAt > FIN_RATI`.
 
 ### Reversiones
