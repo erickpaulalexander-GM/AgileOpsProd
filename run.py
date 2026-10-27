@@ -23,14 +23,26 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 VENV_PYTHON = ROOT / ".venv-win" / "Scripts" / "python.exe"
 
+# Nombres de import de todo lo que el pipeline necesita (requirements.txt).
+# pyyaml se importa como `yaml` — el nombre del paquete difiere del import.
+_REQUIRED_MODULES = ("pandas", "openpyxl", "yaml")
+
+
+def _missing_deps() -> list[str]:
+    """Módulos requeridos ausentes en el intérprete actual (orden estable)."""
+    missing: list[str] = []
+    for name in _REQUIRED_MODULES:
+        try:
+            __import__(name)
+        except ImportError:
+            missing.append(name)
+    return missing
+
 
 def _ensure_venv() -> None:
     """Re-ejecuta con el venv si al interprete actual le faltan las deps."""
-    try:
-        import pandas  # noqa: F401
-    except ImportError:
-        pass
-    else:
+    missing = _missing_deps()
+    if not missing:
         return
     try:
         already = Path(sys.executable).resolve() == VENV_PYTHON.resolve()
@@ -38,7 +50,7 @@ def _ensure_venv() -> None:
         already = False
     if already or not VENV_PYTHON.is_file():
         print(
-            "[ERROR] Faltan dependencias (pandas) y no hay venv en "
+            f"[ERROR] Faltan dependencias ({', '.join(missing)}) y no hay venv en "
             f"{VENV_PYTHON}.\n"
             "        Instala con: .\\.venv-win\\Scripts\\python.exe "
             "-m pip install -r requirements.txt"
