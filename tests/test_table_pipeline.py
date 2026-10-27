@@ -1,5 +1,8 @@
 """Table: pool catalog, next-60-min window, per-column filters, sorting."""
-import json, re, shutil, subprocess
+import json
+import re
+import shutil
+import subprocess
 from pathlib import Path
 import pytest
 
