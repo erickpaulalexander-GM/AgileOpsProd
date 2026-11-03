@@ -24,9 +24,9 @@
     - Added __bar--conflict for z-index boost on conflicting bars
     - Overlap stacking handled by JS (timeline.js)
 
-  Global view:
-    - No pool sections: rows are a flat list grouped by (pool, responsable)
-    - Rows are ordered by first start; the pool only keeps homonyms apart
+ Global view:
+   - No pool sections: rows are a flat list grouped by responsable
+   - Rows are ordered by first start; the pool identity rides on each bar chip
 */
 
 /* =============================================  container  */
@@ -207,12 +207,40 @@
   border-bottom: 1px solid var(--text-muted);
 }
 
+/* Row identification (user request: "no se diferencian las filas"): the
+   passes of one person must read as ONE band, and a bar must be traceable
+   to its lane without counting rows.
+   1. Zebra: the even lane gets a clearly visible translucent slate tint —
+      darker than the old 0.07 alphas, which vanished against the surface —
+      with its own dark-theme value. The sticky label alternates too.
+   2. Row highlight: hovering (or keyboard-focus) a bar lights the WHOLE row
+      via :has() — the instant answer to "whose bar is this?". Chromium 105+,
+      Firefox 121+; browsers without :has() simply don't get the highlight. */
 .timeline__row:nth-child(even) .timeline__row-lane {
-  background: rgba(148, 163, 184, 0.07);
+  background: rgba(100, 116, 139, 0.14);
 }
 
 .timeline__row:nth-child(even) .timeline__row-label {
   background: var(--bg-surface-alt);
+}
+
+[data-theme="dark"] .timeline__row:nth-child(even) .timeline__row-lane {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.timeline__row:has(.timeline__bar:hover) .timeline__row-lane,
+.timeline__row:has(.timeline__bar:focus-visible) .timeline__row-lane {
+  background: rgba(71, 85, 105, 0.22);
+}
+
+.timeline__row:has(.timeline__bar:hover) .timeline__row-label,
+.timeline__row:has(.timeline__bar:focus-visible) .timeline__row-label {
+  background: var(--bg-hover);
+}
+
+[data-theme="dark"] .timeline__row:has(.timeline__bar:hover) .timeline__row-lane,
+[data-theme="dark"] .timeline__row:has(.timeline__bar:focus-visible) .timeline__row-lane {
+  background: rgba(148, 163, 184, 0.20);
 }
 
 /* Divider between stacked sub-lanes of ONE resource (simultaneous passes) */
@@ -235,26 +263,28 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  /* T19b: slate-100 de fondo — el slate-50 anterior se perdia contra el lane.
-     Sigue mas tenue que cualquier barra. */
-  background-color: #F1F5F9;
+  /* T19b v2: stronger contrast. The old slates were barely distinguishable
+     from available cells on light surfaces. Now: darker gray base + denser,
+     more opaque hatch — still lighter than every bar fill and void of color
+     so it does not impersonate a status. */
+  background-color: #E2E8F0;
   background-image: repeating-linear-gradient(
     135deg,
-    rgba(100, 116, 139, 0.06) 0px,
-    rgba(100, 116, 139, 0.06) 2px,
-    transparent 2px,
-    transparent 8px
+    rgba(71, 85, 105, 0.30) 0px,
+    rgba(71, 85, 105, 0.30) 3px,
+    transparent 3px,
+    transparent 10px
   );
 }
 
 [data-theme="dark"] .timeline__offshift {
-  background-color: rgba(100, 116, 139, 0.14);
+  background-color: rgba(100, 116, 139, 0.30);
   background-image: repeating-linear-gradient(
     135deg,
-    rgba(148, 163, 184, 0.05) 0px,
-    rgba(148, 163, 184, 0.05) 2px,
-    transparent 2px,
-    transparent 8px
+    rgba(148, 163, 184, 0.16) 0px,
+    rgba(148, 163, 184, 0.16) 3px,
+    transparent 3px,
+    transparent 10px
   );
 }
 
@@ -264,12 +294,16 @@
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-weight: 700;
+  color: #475569;
   white-space: nowrap;
   text-align: center;
   line-height: 1.4;
   pointer-events: none;
+}
+
+[data-theme="dark"] .timeline__offshift-label {
+  color: #CBD5E1;
 }
 
 /* Individual bar */

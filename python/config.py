@@ -29,6 +29,13 @@ DEFAULTS: dict[str, Any] = {
     },
     "shifts": {
         "file": "horarios_importados_*.json",
+        # Hojas del export que no hacen pases: nunca figuran en el timeline.
+        "excluded_sheets": [
+            "PoolProyecto",
+            "LEGACY",
+            "SAMAY1",
+            "Samay2",
+        ],
     },
     "app": {
         "name": "Pases AgileOps",

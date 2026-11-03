@@ -88,6 +88,10 @@ app:
 shifts:
   file: "horarios_importados_*.json"  # newest match inside input_dir wins;
                                       # missing file = no lane shading, warn only
+  excluded_sheets: ["PoolProyecto", "LEGACY", "SAMAY1", "Samay2"]
+  # Sheets that never do passes: their records are dropped, and unknown
+  # sheets in a future export are ignored with a warning. PoolCapacity IS
+  # kept (it covers vacations/sick leave/licenses/absences for every pool).
 ```
 
 Precedence: CLI `excel_path` > config > built-in defaults. Missing

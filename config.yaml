@@ -13,6 +13,8 @@ excel:
 shifts:
   # Patron dentro de input_dir (el mas nuevo manda). Sin match: sin sombreado.
   file: "horarios_importados_*.json"
+  # Hojas del export que no hacen pases (no figuran en el timeline).
+  excluded_sheets: ["PoolProyecto", "LEGACY", "SAMAY1", "Samay2"]
 
 app:
   name: "Pases AgileOps"

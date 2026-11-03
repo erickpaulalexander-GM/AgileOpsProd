@@ -64,11 +64,12 @@ queda fuera del viewport no es un conflicto en pantalla.
 
 ## Filas (carriles)
 
-Las filas se agrupan por **(pool, responsable)**, no solo por responsable: dos
-personas homónimas en pools distintos conservan su propio carril, y el sombreado
-fuera de turno se busca por pool + responsable. El orden es por primer inicio,
-con el responsable como desempate. La clave interna del carril es
-`_laneKey(pool, responsable)`.
+Las filas se agrupan por **responsable** (v1.2): una persona es UN carril, aunque
+fique pases en varios pools (la identidad de pool viaja en el chip de cada barra;
+el carril solo conserva la lista de pools que tocó para el lookup fuera de
+turno). El sombreado fuera de turno usa el primer pool del grupo que matchee en
+`window.ResourceShifts`. El orden es por primer inicio, con el responsable como
+desempate. La clave interna del carril es `_laneKey(responsable)`.
 
 El mismo listado de carriles lo leen **ambos** bucles de render (`_renderBars` y
 `_renderConflicts`): nunca hay dos listas que puedan discrepar.
@@ -79,7 +80,7 @@ El componente **no** conoce la lista de pools. La recibe del contrato:
 
 | Fuente | Uso |
 | --- | --- |
-| `timeline[].pool` | pool al que pertenece cada barra (identidad de carril y turnos) |
+| `timeline[].pool` | pool al que pertenece cada barra (chip de la barra y lookup de turnos) |
 | `Timeline.poolKey(name)` | slug CSS-safe; **única** fuente del mapeo nombre → token |
 
 Pools actuales: `Yape`, `S&F`, `AgileOps ORO`, `AgileOps Prod` (4 familias;
@@ -133,8 +134,24 @@ No hace falta tocar `timeline.js` ni el orden de render: el slug lo produce
 ## Fuera de turno (T19)
 
 El fondo del carril sombrea los intervalos fuera de turno del responsable
-(`window.ResourceShifts`, payload del backend): fondo slate-100 + diagonal
-0.06 en claro (el slate-50 original se perdia; en dark variante propia),
-siempre DETRÁS de las barras (orden DOM) para que los pases protagonicen.
-Sin match de persona o sin archivo de turnos no se pinta nada. Las etiquetas
-solo salen en segmentos anchos; todo segmento lleva tooltip.
+(`window.ResourceShifts`, payload del backend): en claro, base `#E2E8F0` +
+diagonal más marcada (la mezcla slate-100/0.06 original era apenas
+distinguible de una celda disponible; en dark, variante propia con más opacidad
+de relleno y rayas), siempre DETRÁS de las barras (orden DOM) para que los
+pases protagonicen. Sin match de persona o sin archivo de turnos no se pinta
+nada. Las etiquetas solo salen en segmentos anchos; todo segmento lleva tooltip.
+
+## Identificación de filas
+
+Pedido del usuario ("no se diferencian las filas — cuesta saber de quién es
+cada pase"): las filas no se distinguen entre sí y rastrear una barra hasta su
+persona exige contar filas. Dos mecanismos, sin JS:
+
+1. **Cebra** en las filas pares: tinte slate translúcido claramente visible
+   (alpha 0.14 light / 0.12 dark; el 0.07 original desaparecía contra la
+   superficie). La columna sticky del responsable alterna con la misma lógica
+   (`--bg-surface-alt`).
+2. **Resaltado de fila**: hovering o foco (teclado) sobre una barra ilumina la
+   FILA completa vía `:has(.timeline__bar:hover / :focus-visible)` — la
+   respuesta inmediata a "¿de quién es esta barra?". Sin `:has()` el
+   navegador simplemente no resalta; no hay degradación rota.
