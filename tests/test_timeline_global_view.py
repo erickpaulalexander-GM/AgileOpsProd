@@ -68,15 +68,24 @@ T.init(doc.getElementById('timeline'), c, null);
 const h=els['timeline-header'].innerHTML, g=els['timeline-grid'].innerHTML, b=els['timeline-bars'].innerHTML;
 const styleOf=(tk)=>{ const m=new RegExp('<div class="timeline__bar[^"]*" style="([^"]*)" data-ticket="'+tk+'"').exec(b); return m?m[1]:'ABSENT'; };
 const rows=[...b.matchAll(/class="timeline__row-name">([^<]*)</g)].map(m=>m[1]);
+const barsHtml=b;
 console.log(JSON.stringify({ offsetMin:T.viewWindow().offsetMin, minutes:T.viewWindow().minutes,
   widths:[...g.matchAll(/width:([0-9.]+)px/g)].map(m=>+m[1]),
   labels:[...h.matchAll(/>(\d{2}:\d{2})</g)].map(m=>m[1]),
-  barEarly:styleOf('EARLY'), barLate:styleOf('LATE'), rows }));
+  barEarly:styleOf('EARLY'), barLate:styleOf('LATE'), rows, barsHtml }));
 '''
 
 
+def _ana_row(bars_html):
+    """The single lane that holds every 'Ana' bar (bars live inside the row
+    div; split on the next row boundary if several lanes ever exist)."""
+    start = bars_html.index('data-ticket="EARLY"')
+    row_start = bars_html.rindex('class="timeline__row"', 0, start)
+    return bars_html[row_start:]
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-def test_s2_s5_a2_geometry(tmp_path):
+def test_s2_s5_v12_lane_per_person_geometry(tmp_path):
     probe = tmp_path / "probe.js"
     probe.write_text(NODE_PROBE, encoding="utf-8")
     out = subprocess.run(
@@ -87,9 +96,15 @@ def test_s2_s5_a2_geometry(tmp_path):
     assert d["minutes"] == 240 and d["offsetMin"] == 30
     assert d["labels"] == ["04:30", "05:00", "06:00", "07:00", "08:00"]
     assert d["widths"] == [96] * 8 and sum(d["widths"]) == 768
-    # 1px inset per side so adjacent passes never fuse: left 0+1, width 96-2\n    assert "left:1px" in d["barEarly"] and "width:94px" in d["barEarly"]
+    # 1px inset per side so adjacent passes never fuse: left 0+1, width 96-2
+    assert "left:1px" in d["barEarly"] and "width:94px" in d["barEarly"]
     assert d["barLate"] == "ABSENT"
-    assert d["rows"] == ["Ana", "Ana"]
+    # v1.2: ONE lane per responsable. The same person running passes in two
+    # pools (P + Q) takes a single row, and that row holds all their bars.
+    assert d["rows"] == ["Ana"]
+    ana_row = _ana_row(d["barsHtml"])
+    assert ana_row.count('data-ticket="EARLY"') == 1
+    assert ana_row.count('data-ticket="C"') == 1
 
 
 def test_b1_indicator_rendered_after_timeline_init():

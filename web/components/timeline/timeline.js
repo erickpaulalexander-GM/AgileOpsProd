@@ -6,10 +6,12 @@
  * Responsibilities (TIMELINE_SPEC.md):
  *   - Render bars with correct positioning (ADR-004: minutes)
  *   - ONE global view: a single flat lane list, no pool sections
- *   - Group rows by (pool, RECURSO ASIGNADO) so homonymous resources in
- *     different pools never share a lane
+ *   - Group rows by RECURSO ASIGNADO: a person is ONE lane, even when they
+ *     run passes in several pools (v1.2). The pool lives on each bar (chip);
+ *     the lane keeps the pool list only for the per-pool off-shift lookup.
  *   - Detect and stack overlapping bars vertically
- *   - Detect Implementation vs Implementation conflicts (orange triangle)
+ *   - Detect Implementation vs Implementation conflicts (orange triangle),
+ *     now also across pools of the SAME person
  *   - Horizontal scroll with sticky responsable column
  *   - Drawer integration (click → open)
  *
@@ -142,7 +144,7 @@ window.Timeline = (function () {
   var _allBars = [];          // flat array of all bar data
   var _onBarClick = null;     // callback(barData)
   var _responsableMap = {};   // ticket → RECURSO ASIGNADO (render-only)
-  var _rowMetrics = {};       // lane key (pool + responsable) → { top, height }
+  var _rowMetrics = {};       // lane key (responsable) → { top, height }
   var _viewOffsetMin = 0;     // minutes from the window start to the run clock
   var _visibleBarCount = 0;   // bars drawn inside the 4h viewport by the last render
   var _cellPx = CELL_PX;      // px per 30-min cell; stretched to fill the container (_fitScale)
@@ -382,9 +384,9 @@ window.Timeline = (function () {
   /* =========================================================
      LAYER 3: BARS — ONE flat global list (no pool sections)
      ---------------------------------------------------------
-     Rows are grouped by (pool, responsable) but drawn as a single flat list
-     ordered by first start. The pool only keeps two pools' homonymous
-     resources in separate lanes and feeds the per-pool off-shift lookup.
+      Rows are grouped by responsable and drawn as a single flat list
+      ordered by first start. The pools a lane touches live on the group
+      for the off-shift lookup; the pool identity rides on each bar chip.
      ========================================================= */
   function _renderBars() {
     var el = document.getElementById('timeline-bars');
@@ -421,7 +423,7 @@ window.Timeline = (function () {
         maxDepth * (rowHeight - gap * 2) + gap * 2 + gap * (maxDepth - 1)
       );
 
-      _rowMetrics[_laneKey(group.pool, group.responsable)] = {
+      _rowMetrics[_laneKey(group.responsable)] = {
         top: cumulativeTop,
         height: rowH,
       };
@@ -432,7 +434,7 @@ window.Timeline = (function () {
         + '<span class="timeline__row-count" title="' + bars.length + ' pase(s) en la ventana">' + bars.length + '</span>'
         + '</div>'
         + '<div class="timeline__row-lane">'
-        + _offShiftHtml(group.pool, group.responsable, off);
+        + _offShiftHtml(group.pools, group.responsable, off);
 
       var barHeight = (rowH - gap * 2 - gap * (maxDepth - 1)) / maxDepth;
 
@@ -512,16 +514,10 @@ window.Timeline = (function () {
   }
 
   /* =========================================================
-     T19: OFF-SHIFT LANE SHADING from window.ResourceShifts (backend payload).
-     Unmatched lanes and missing payload render nothing (degraded path).
-     Labels render only on wide segments; every segment has a title tooltip.
-     ========================================================= */
-  function _laneShift(pool, responsable) {
-    var RS = (typeof window !== 'undefined') ? window.ResourceShifts : null;
-    if (!RS || !RS[pool] || !RS[pool][responsable]) return null;
-    return RS[pool][responsable];
-  }
-
+      T19: OFF-SHIFT LANE SHADING from window.ResourceShifts (backend payload).
+      Unmatched lanes and missing payload render nothing (degraded path).
+      Labels render only on wide segments; every segment has a title tooltip.
+      ========================================================= */
   function _offClock(min) {
     var parts = _contract.meta.windowStart.split(':');
     var t = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) + min;
@@ -535,9 +531,18 @@ window.Timeline = (function () {
     return 'Fuera de turno (entre ' + _offClock(seg[0]) + ' y ' + _offClock(seg[1]) + ')';
   }
 
-  function _offShiftHtml(pool, responsable, off) {
-    var lane = _laneShift(pool, responsable);
-    if (!lane || !lane.matched || !Array.isArray(lane.fuera)) return '';
+  function _offShiftHtml(pools, responsable, off) {
+    var RS = null, lane = null;
+    if (typeof window !== 'undefined') RS = window.ResourceShifts;
+    if (!RS) return '';
+    /* Una persona es UN carril: su disponibilidad es la misma en todas las
+       familias donde figura. Se usa el primer pool con match; si un pool
+       falla el match y otro no, el horario fisico manda igual. */
+    for (var i = 0; i < pools.length && !lane; i++) {
+      lane = RS[pools[i]] && RS[pools[i]][responsable];
+      if (lane && (!lane.matched || !Array.isArray(lane.fuera))) lane = null;
+    }
+    if (!lane) return '';
     var viewEnd = off + VIEW_MINUTES;
     var out = '';
     lane.fuera.forEach(function (seg) {
@@ -561,25 +566,29 @@ window.Timeline = (function () {
     return out;
   }
 
-  /** Stable lane identity: homonymous resources in different pools never merge. */
-  function _laneKey(pool, responsable) {
-    return String(pool || UNKNOWN_POOL) + '\u0000' + String(responsable || '');
+  /* Stable lane identity: ONE lane per RECURSO ASIGNADO. The backend now
+     unions a person's schedules across pools, so homonymous resources are
+     the only legacy worry — and RECURSO ASIGNADO carries full names. */
+  function _laneKey(responsable) {
+    return String(responsable || '');
   }
 
   /**
-   * ONE flat lane list for the global view: group by (pool, responsable),
-   * ordered by first start with responsable as the tie-breaker.
-   * A bar without a pool is grouped under UNKNOWN_POOL rather than being
-   * forced into a real pool — a silent wrong default would mislabel it.
+   * ONE flat lane list for the global view: group by responsable, ordered
+   * by first start (responsable as tie-breaker). The group keeps the
+   * ordered pool list every bar touched, so the off-shift lookup can use
+   * the per-pool entries in window.ResourceShifts. A bar without a pool
+   * is still its own person's bar — never forced into a real pool.
    */
   function _groupLanes(allBars) {
     var byLane = {};
     allBars.forEach(function (bar) {
       var pool = bar.pool || UNKNOWN_POOL;
-      var key = _laneKey(pool, bar.responsable);
+      var key = _laneKey(bar.responsable);
       if (!byLane[key]) {
-        byLane[key] = { pool: pool, responsable: bar.responsable, bars: [] };
+        byLane[key] = { responsable: bar.responsable, pools: [], bars: [] };
       }
+      if (byLane[key].pools.indexOf(pool) === -1) byLane[key].pools.push(pool);
       byLane[key].bars.push(bar);
     });
 
@@ -637,7 +646,7 @@ window.Timeline = (function () {
       var conflicts = _detectConflicts(bars);
       if (!conflicts.length) return;
 
-      var metrics = _rowMetrics[_laneKey(group.pool, group.responsable)]
+      var metrics = _rowMetrics[_laneKey(group.responsable)]
         || { top: 0, height: 44 };
       var top = metrics.top + (metrics.height / 2) - 5;
 
