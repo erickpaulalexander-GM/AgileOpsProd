@@ -198,6 +198,213 @@ def test_build_lane_payload_marks_unmatched():
     assert lane["fuera"] == []
 
 
+# --- Esquema flat del export del cliente (noviembre 2026 en adelante) ---
+
+FLAT_PAYLOAD = {
+    "generated_at": "2026-11-02T17:31:23",
+    "people": [
+        {
+            "resource": "Pool de pases",
+            "person": "Cesar Pingo",
+            "hoja": "PoolPases",
+            "tipoHorario": "Normal",
+            "fecha": "2026-11-01",
+            "shifts": [
+                {"start": "2026-11-07T22:00", "end": "2026-11-08T01:00"}
+            ],
+        },
+        {
+            "resource": "Pool de pases",
+            "person": "Cesar Pingo",
+            "hoja": "PoolPases-D",
+            "tipoHorario": "Derivado",
+            "fecha": "2026-11-01",
+            "shifts": [
+                {"start": "2026-11-07T22:00", "end": "2026-11-08T00:00"},
+                {"start": "2026-11-08T02:00", "end": "2026-11-08T04:00"},
+            ],
+        },
+        {
+            "resource": "PoolCapacity",
+            "person": "Ana Aguilera",
+            "hoja": "PoolCapacity",
+            "tipoHorario": "Normal",
+            "fecha": "2026-11-02",
+            "shifts": [{"start": "2026-11-07T20:00", "end": "2026-11-08T04:00"}],
+        },
+        {
+            "resource": "Samay02",
+            "person": "Juan Externo",
+            "hoja": "Samay2",
+            "tipoHorario": "Normal",
+            "fecha": "2026-11-02",
+            "shifts": [{"start": "2026-11-07T22:00", "end": "2026-11-08T04:00"}],
+        },
+        {
+            "resource": "Proyectos",
+            "person": "Grupo Proyecto",
+            "hoja": "PoolProyecto",
+            "tipoHorario": "Normal",
+            "fecha": "2026-11-02",
+            "shifts": [{"start": "2026-11-07T22:00", "end": "2026-11-08T04:00"}],
+        },
+    ],
+}
+
+
+def _write_flat(tmp_path):
+    import json
+
+    p = tmp_path / "horarios_importados_2026_11.json"
+    p.write_text(json.dumps(FLAT_PAYLOAD), encoding="utf-8")
+    return p
+
+
+def test_load_flat_merges_same_person_tracks_and_filters_excluded_sheets(tmp_path):
+    loaded = load_shifts(_write_flat(tmp_path))
+    by_name = {p["person"]: p for p in loaded["people"]}
+    # Las hojas que no hacen pases no entran.
+    assert set(by_name) == {"Cesar Pingo", "Ana Aguilera"}
+    cesar = by_name["Cesar Pingo"]
+    # La misma persona en PoolPases y PoolPases-D es UN candidato con dos pistas.
+    assert cesar["families"] == ("AgileOps ORO", "AgileOps Prod")
+    assert cesar["tracks"]["normal"] == [
+        (datetime(2026, 11, 7, 22, 0), datetime(2026, 11, 8, 1, 0))
+    ]
+    assert cesar["tracks"]["derivado"] == [
+        (datetime(2026, 11, 7, 22, 0), datetime(2026, 11, 8, 0, 0)),
+        (datetime(2026, 11, 8, 2, 0), datetime(2026, 11, 8, 4, 0)),
+    ]
+
+
+def test_load_flat_capacity_covers_every_pool_family(tmp_path):
+    loaded = load_shifts(_write_flat(tmp_path))
+    ana = next(p for p in loaded["people"] if p["person"] == "Ana Aguilera")
+    assert ana["families"] == ("Yape", "S&F", "AgileOps ORO", "AgileOps Prod")
+
+
+def test_match_flat_returns_availability_union(tmp_path):
+    loaded = load_shifts(_write_flat(tmp_path))
+    people = loaded["people"]
+    cesar = match_person("Cesar Andres Pingo Ruiz", "AgileOps Prod", people)
+    # Union de sus pistas normal + derivado, fusionadas por solapamiento.
+    assert cesar is not None and cesar["shifts"] == [
+        (datetime(2026, 11, 7, 22, 0), datetime(2026, 11, 8, 1, 0)),
+        (datetime(2026, 11, 8, 2, 0), datetime(2026, 11, 8, 4, 0)),
+    ]
+    # PoolCapacity no tiene pista derivada: su pista normal no cambia.
+    ana = match_person(
+        "Ana Maria Aguilera Ferrer", "S&F", people, track="derivado"
+    )
+    assert ana is not None and ana["shifts"] == [
+        (datetime(2026, 11, 7, 20, 0), datetime(2026, 11, 8, 4, 0))
+    ]
+
+
+def test_lane_payload_shades_with_union_of_tracks_regardless_of_bar_type():
+    from shifts import build_lane_shifts
+
+    people = [
+        {
+            "person": "Cesar Pingo",
+            "families": ("AgileOps Prod",),
+            "shifts_by_track": {
+                "normal": [
+                    (
+                        datetime(2026, 10, 7, 22, 0),
+                        datetime(2026, 10, 8, 1, 0),
+                    )
+                ],
+                "derivado": [
+                    (
+                        datetime(2026, 10, 7, 22, 0),
+                        datetime(2026, 10, 8, 0, 0),
+                    ),
+                    (
+                        datetime(2026, 10, 8, 2, 0),
+                        datetime(2026, 10, 8, 4, 0),
+                    ),
+                ],
+            },
+        }
+    ]
+    derivado_row = _lane_row(
+        "T1",
+        "Pool AgileOps Prod - Derivado",
+        "Cesar Andres Pingo Ruiz",
+        datetime(2026, 10, 7, 23, 0),
+        datetime(2026, 10, 8, 0, 30),
+    )
+    normal_row = _lane_row(
+        "T2",
+        "Pool AgileOps Prod",
+        "Cesar Andres Pingo Ruiz",
+        datetime(2026, 10, 7, 23, 0),
+        datetime(2026, 10, 8, 0, 30),
+    )
+    # Ambos tipos de barra se sombrean con la MISMA disponibilidad.
+    for row in (derivado_row, normal_row):
+        lanes = build_lane_shifts([row], people, WSTART, WEND)
+        lane = lanes["AgileOps Prod"]["Cesar Andres Pingo Ruiz"]
+        assert lane["matched"] is True
+        # Pistas unidas: cubre 22:00-01:00 y 02:00-04:00 dentro de la ventana
+        # 20:00-04:00; solo quedan fuera 20:00-22:00 y 01:00-02:00.
+        assert lane["fuera"] == [[0, 120], [300, 360]]
+
+
+def test_collect_out_of_shift_ignores_bar_type():
+    from shifts import collect_out_of_shift
+
+    people = [
+        {
+            "person": "Cesar Pingo",
+            "families": ("AgileOps Prod",),
+            "shifts_by_track": {
+                "normal": [
+                    (
+                        datetime(2026, 10, 7, 22, 0),
+                        datetime(2026, 10, 8, 6, 0),
+                    )
+                ],
+                "derivado": [
+                    (
+                        datetime(2026, 10, 7, 22, 0),
+                        datetime(2026, 10, 8, 0, 0),
+                    ),
+                ],
+            },
+        }
+    ]
+    rows = [
+        # Pase derivado 23:00-00:30: dentro de su turno unificado.
+        _lane_row(
+            "T-D-OK",
+            "Pool AgileOps Prod - Derivado",
+            "Cesar Andres Pingo Ruiz",
+            datetime(2026, 10, 7, 23, 0),
+            datetime(2026, 10, 8, 0, 30),
+        ),
+        # Pase derivado 04:30-05:30: la pista derivada no lo cubre (termina
+        # 00:00), pero la NORMAL (22:00-06:00) si. Union manda: no es anomalia.
+        _lane_row(
+            "T-D-OK2",
+            "Pool AgileOps Prod - Derivado",
+            "Cesar Andres Pingo Ruiz",
+            datetime(2026, 10, 8, 4, 30),
+            datetime(2026, 10, 8, 5, 30),
+        ),
+        # 07:00-08:00 esta fuera de todo horario: ese si se marca.
+        _lane_row(
+            "T-OUT",
+            "Pool AgileOps Prod - Derivado",
+            "Cesar Andres Pingo Ruiz",
+            datetime(2026, 10, 8, 7, 0),
+            datetime(2026, 10, 8, 8, 0),
+        ),
+    ]
+    assert collect_out_of_shift(rows, people) == ["T-OUT"]
+
+
 def test_collect_out_of_shift_flags_disjoint_only():
     from shifts import collect_out_of_shift
 

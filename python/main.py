@@ -311,7 +311,10 @@ def main(
     shifts_source = "none"
     if shifts_path is not None:
         try:
-            shifts_people = load_shifts(shifts_path)["people"]
+            shifts_people = load_shifts(
+                shifts_path,
+                excluded_sheets=(cfg.get("shifts", {}).get("excluded_sheets")),
+            )["people"]
             shifts_source = str(shifts_path)
         except (OSError, ValueError, KeyError) as exc:
             logger.warning("Turnos no cargados (%s); sin sombreado", exc)
