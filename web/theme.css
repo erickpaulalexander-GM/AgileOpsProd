@@ -81,7 +81,7 @@
   --tl-chip-accent-agileops-prod: #64748B;
 
   /* Layout */
-  --content-max-width: 1600px;
+  --content-max-width: 100%;
   --content-padding: 16px;
   --section-gap: 16px;
   --card-radius: 10px;
